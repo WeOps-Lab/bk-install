@@ -1,12 +1,12 @@
 #!/opt/py36/bin/python
 # -*- coding: utf8
+import time
 import argparse
 import requests
 import json
 import sys
 import re
 import logging
-import time
 
 class Message(object):
     list_biz_hosts = "/api/c/compapi/v2/cc/list_biz_hosts/"
@@ -52,14 +52,14 @@ class Message(object):
     real_module_dict = {
         'cmdb' : ["cmdb-admin","cmdb-api","cmdb-auth","cmdb-cloud","cmdb-cache","cmdb-core","cmdb-datacollection",
                                             "cmdb-event","cmdb-host","cmdb-op","cmdb-proc","cmdb-task","cmdb-topo","cmdb-web"], # cmdb 去掉 cmdb-synchronize, 并且 cmdb-operation更名为cmdb-op
-        "gse" : ["gse_api","gse_task","gse_btsvr","gse_data","gse_dba","gse_alarm","gse_proc","gse_config"],
+        "gse" : ["gse_api","gse_task","gse_btsvr","gse_data","gse_dba","gse_alarm","gse_proc"],
         "job": ["job-config","job-gateway","job-manage","job-execute","job-crontab","job-logsvr","job-backup","job-analysis"],
-        "monitor": ["influxdb-proxy","monitor","grafana","transfer","unify-query","ingester"],
+        "monitor": ["influxdb-proxy","monitor","grafana","transfer",],
         "nodeman": ["nodeman-api"],
         'iam': ['bk-iam'],
         'iam_search_engine': ['bkiam-search-engine'],
         "ssm": ['bk-ssm'],
-        "paas": ["paas","appengine","esb","login","console","apigw"],
+        "paas": ["paas","appengine","esb","login","apigw"],  # 社区版不存在 console
         "es7": ["elasticsearch"],
         "zk": ["zookeeper"]
     }
@@ -94,7 +94,7 @@ class Action(object):
             "bk_biz_id": self.bk_biz_id,
             "page": {
               "start": 0,
-              "limit": 200,
+              "limit": 50,
               "sort": "-name"
             }
         }

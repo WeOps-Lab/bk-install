@@ -150,7 +150,6 @@ sql_mode=''
 
 # innodb
 default-storage-engine=innodb
-innodb_buffer_pool_size=10240M
 innodb_data_file_path=ibdata1:1G:autoextend
 innodb_file_format=Barracuda
 innodb_file_per_table=1

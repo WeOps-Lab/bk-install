@@ -3,12 +3,10 @@ bk-iam	iam	bk-iam	bkiam_config.yaml		5001	TCP
 bkiam-search-engine	iam-search-engine	bkiam-search-engine	bkiam_search_engine_config.yaml		5003	TCP
 bk-ssm	ssm	ssm	bkssm_config.yaml		5000	TCP
 						
-						
 appengine	uwsgi	open_paas-appengine	uwsgi-open_paas-appengine.ini		8000	TCP
 paas	uwsgi	open_paas-paas	uwsgi-open_paas-paas.ini		8001	TCP
 esb	uwsgi	open_paas-esb	uwsgi-open_paas-esb.ini		8002	TCP
 login	uwsgi	open_paas-login	uwsgi-open_paas-login.ini		8003	TCP
-console	uwsgi	open_paas-console	uwsgi-open_paas-console.ini		8004	TCP
 apigw	uwsgi	open_paas-apigw	uwsgi-open_paas-apigw.ini		8005	TCP
 appo	paas_agent	paas_agent			4245	TCP
 appt	paas_agent	paas_agent			4245	TCP
@@ -22,12 +20,11 @@ job-manage	java	job-manage	job-manage.jar	0.0.0.0	10505	TCP
 job-backup	java	job-backup	job-backup.jar	0.0.0.0	10507	TCP
 job-analysis	java	job-analysis	job-analysis.jar	0.0.0.0	10508	TCP
 						
-						
 gse_api	gse_api	gse_api			50002	TCP
 gse_alarm	gse_alarm	gse_alarm		0.0.0.0		TCP
 gse_btsvr	gse_btsvr	gse_btsvr		0.0.0.0	58930	TCP
 gse_data	gse_data	gse_data		0.0.0.0	58625	TCP
-gse_dba	gse_dba	gse_dba			58859	TCP
+gse_dba	gse_dba	gse_dba			58817	TCP
 gse_proc	gse_procmgr	gse_procmgr			52030	TCP
 gse_task	gse_task	gse_task			48669	TCP
 gse_config	gse_config	gse_config			59702	TCP
@@ -61,6 +58,7 @@ nodeman-api	python	nodeman-api	bknodeman-nodeman/bin/gunicorn		10300	TCP
 bklog-api	python	bklog-api	bklog-api/bin/gunicorn -c gunicorn_config		10400	TCP
 bklog-grafana	grafana-server	bk-log-grafana	logs/bklog/		10401	TCP
 						
+						
 beanstalk	beanstalkd	beanstalkd	beanstalkd	0.0.0.0	11300	TCP
 consul	consul	consul	-config-dir=/etc/consul.d	127.0.0.1	8500	TCP
 elasticsearch	java	elasticsearch	/usr/share/elasticsearch/jdk/bin/java		9200	TCP
@@ -73,11 +71,11 @@ rabbitmq	beam.smp	rabbitmq	beam.smp	0.0.0.0	5672	TCP
 redis	redis-server	redis-server			6379	TCP
 zookeeper	java	zookeeper	/etc/zookeeper		2181	TCP
 consul-template	consul-template	consul-template	/etc/consul-template/conf.d	0.0.0.0		TCP
-redis_sentinel	redis-sentinel	redis-sentinel	sentinel		26379	TCP
 						
 						
-controller_ip	controller_ip			0.0.0.0		
+controller_ip	controller_ip					
 usermgr	python	usermgr	usermgr-api/bin/gunicorn	0.0.0.0	8009	TCP
 license	license_server	license	license.json	0.0.0.0	8443	TCP
-bcs	bcs	bcs		0.0.0.0		TCP
+						
+bcs	bcs	bcs				TCP
 						

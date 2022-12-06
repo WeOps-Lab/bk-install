@@ -5,9 +5,8 @@ import argparse
 import sys
 import yaml
 import re
-import os
 import shutil
-
+import os
 
 TMP_DIR='/tmp/bk_project'
 
@@ -70,7 +69,7 @@ class Config:
                 if module == 'paas_agent' : module = 'appo'
                 if module == 'bklog' : module = 'log'
                 if module == 'bkiam_search_engine' : module = 'iam_search_engine'
-                if module == 'bkauth' : module = 'auth'
+                if module == 'bkauth': module = 'auth'
 
                 project = i['name']
                 projects.append(project)
@@ -127,7 +126,7 @@ class Config:
     def storage(cls, port_yaml):
         statement = []
         statement.append("declare -A _project_port _project_consul _project_name _projects")
-        storage_list = ['redis', 'redis_sentinel', 'mysql', 'pypi', 'yum', "influxdb", "es7", "zk", "rabbitmq", "mongodb", "kafka", "beanstalk"]
+        storage_list = ['redis', 'mysql', 'pypi', 'yum', "influxdb", "es7", "zk", "rabbitmq", "mongodb", "kafka", "beanstalk"]
         port_env = yaml.load(open(port_yaml), Loader=yaml.FullLoader)
         for storage in storage_list:
             projects = list(port_env[storage].keys())

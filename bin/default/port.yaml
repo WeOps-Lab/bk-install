@@ -5,7 +5,7 @@ lesscode:
 fta:
   fta:
     port: 13031
-    consul: fta-api 
+    consul: fta-api
 bkmonitorv3:
   monitor: 
     port: 10204
@@ -25,6 +25,7 @@ bkmonitorv3:
   ingester:
     port: 10220
     consul: ingester.bkmonitorv3
+
 cmdb: 
   api: 
     port: 9001
@@ -94,10 +95,6 @@ iam:
   server:
     port: 5001
     consul: bkiam
-iam_search_engine:
-  server:
-    port: 5003
-    consul: bkiam-search-engine
 ssm: 
   server:
     port: 5000
@@ -110,7 +107,6 @@ usermgr:
   api:
     port: 8009
     consul: usermgr
-
 
 gse:
   gse_api:
@@ -167,6 +163,7 @@ job:
     port: 10508
     consul:
 
+
 paas_agent:
   paas_agent:
     port: 8445
@@ -183,37 +180,37 @@ bklog:
     consul: bklog-api 
   grafana:
     port: 10401
-    consul: bklog-grafana 
+    consul: bklog-grafana
+
 bkiam:
   server:
     port: 5001
     consul: bkiam
-bkiam_search_engine:
+
+iam_search_engine:
   server:
     port: 5003
     consul: bkiam-search-engine
-
-
 
 redis:
   default:
     port: 6379
     consul: redis
     name: default
-  paas:
-    port: 6379
-    consul: redis-paas
-    name: redis
-  paas_plugins:
-    port: 6379
-    consul: redis-paasplugins
-    name: redis
-redis_sentinel:
-  default:
-    # 默认第一个端口为单节点
-    port: 6380,26379
-    consul: redis-sentinel
-    master_name: mymaster 
+#  paas:
+#    port: 6379
+#    consul: redis-paas
+#    name: redis
+#  paas_plugins:
+#    port: 6379
+#    consul: redis-paasplugins
+#    name: redis
+#redis_cluster:
+#  default:
+#    # 默认第一个端口为单节点
+#    port: 6379,26379
+#    consul: redis-sentinel
+#    master_name: mymaster 
 rabbitmq:
   default:
     port: 5672
@@ -226,24 +223,24 @@ mongodb:
   default:
     port: 27017
     consul: mongodb
-    name: admin
-  cmdb:
-    port: 27017
-    consul: mongodb-cmdb
-    name: cmdb
-  job:
-    port: 27017
-    consul: mongodb-job
-    name: joblog
-  gse:
-    port: 27017
-    consul: mongodb-gse
-    name: gse
+#  cmdb:
+#    port: 27017
+#    consul: mongodb-cmdb
+#  job:
+#    port: 27017
+#    consul: mongodb-job
+#  gse:
+#    port: 27017
+#    consul: mongodb-gse
 es7:
   default:
     # 第一个为rest port, 第二个为transport port
     port: 9200,9300
     consul: es7
+kafka:
+  default:
+    port: 9092
+    consul: kafka
 influxdb:
   default:
     port: 8086
@@ -275,7 +272,7 @@ mysql:
     name: nodeman
   monitorv3:
     port: 3306
-    consul: mysql-monitorv3
+    consul: mysql-monitor
     name: bkmonitorv3
   ssm:
     port: 3306
@@ -301,7 +298,7 @@ mysql:
     port: 3306
     consul: mysql-apigw
     name: apigw
-  
+
 pypi:
   default:
     port: 8081
@@ -310,10 +307,6 @@ yum:
   default:
     port: 8080
     consul: yum
-kafka:
-  default:
-    port: 9092
-    consul: kafka
 beanstalk:
   default:
     port: 11300
@@ -323,7 +316,7 @@ beanstalk:
 apigw:
   api-support:
     port: 6002
-    consul: apigw-support 
+    consul: apigw-support
   dashboard:
     port: 6000
     consul: apigw-dashboard
@@ -342,4 +335,3 @@ apigw:
   apigateway:
     port: 6006
     consul: apigw-apigateway
-  

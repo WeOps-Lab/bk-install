@@ -4,8 +4,8 @@
 import time
 import socket
 import traceback
-import sys 
-import os 
+import sys
+import os
 from pymongo.common import clean_node
 import requests
 import re
@@ -26,18 +26,18 @@ from elasticsearch import Elasticsearch
 
 environ_list = { 
                 'dbadmin': ["BK_CONSUL_KEYSTR_32BYTES", "BK_MONGODB_KEYSTR_32BYTES", "BK_MONGODB_ADMIN_USER", "BK_MONGODB_ADMIN_PASSWORD", "BK_MYSQL_ADMIN_USER", "BK_MYSQL_ADMIN_PASSWORD", "BK_RABBITMQ_ADMIN_USER", "BK_RABBITMQ_ADMIN_PASSWORD", "BK_REDIS_SENTINEL_PASSWORD",],
-                'paas':  ["BK_PAAS_ES7_ADDR",'BK_PAAS_PUBLIC_ADDR', 'BK_PAAS_MYSQL_HOST', 'BK_PAAS_MYSQL_PASSWORD', 'BK_PAAS_MYSQL_PORT', 'BK_PAAS_MYSQL_USER', 'BK_PAAS_MYSQL_NAME', "BK_IAM_PRIVATE_ADDR", "BK_PAAS_ESB_SECRET_KEY", "BK_PAAS_APP_CODE","BK_PAAS_APP_SECRET", "BK_PAAS_REDIS_HOST","BK_PAAS_REDIS_PASSWORD","BK_PAAS_REDIS_PORT", 'BK_USERMGR_PRIVATE_ADDR'],
+                'paas':  ['BK_PAAS_PUBLIC_ADDR', 'BK_PAAS_MYSQL_HOST', 'BK_PAAS_MYSQL_PASSWORD', 'BK_PAAS_MYSQL_PORT', 'BK_PAAS_MYSQL_USER', 'BK_PAAS_MYSQL_NAME', "BK_IAM_PRIVATE_ADDR", "BK_PAAS_ESB_SECRET_KEY", "BK_PAAS_APP_CODE","BK_PAAS_APP_SECRET", "BK_PAAS_REDIS_HOST","BK_PAAS_REDIS_PASSWORD","BK_PAAS_REDIS_PORT", 'BK_USERMGR_PRIVATE_ADDR'],
                 'usermgr': ["BK_DOMAIN", "BK_HOME", "BK_CERT_PATH", "BK_HTTP_SCHEMA", "BK_LICENSE_PRIVATE_ADDR", "BK_PAAS_PUBLIC_ADDR", "BK_PAAS_PUBLIC_URL", "BK_IAM_PRIVATE_URL", "BK_PAAS_ESB_SECRET_KEY", "BK_PAAS_APP_SECRET", "BK_USERMGR_PRIVATE_ADDR", "BK_PAAS_ADMIN_PASSWORD", "BK_PAAS_ADMIN_USERNAME", "BK_USERMGR_APP_CODE", "BK_USERMGR_APP_SECRET", "BK_USERMGR_MYSQL_HOST", "BK_USERMGR_MYSQL_PASSWORD", "BK_USERMGR_MYSQL_PORT", "BK_USERMGR_MYSQL_USER", "BK_USERMGR_RABBITMQ_HOST", "BK_USERMGR_RABBITMQ_PORT", "BK_USERMGR_RABBITMQ_USERNAME", "BK_USERMGR_RABBITMQ_PASSWORD", "BK_USERMGR_RABBITMQ_VHOST",],
                 'bkiam': ["BK_HOME", "BK_IAM_PORT", "BK_PAAS_MYSQL_HOST", "BK_PAAS_MYSQL_PASSWORD", "BK_PAAS_MYSQL_PORT", "BK_PAAS_MYSQL_USER", "BK_IAM_MYSQL_HOST", "BK_IAM_MYSQL_PASSWORD", "BK_IAM_MYSQL_PORT", "BK_IAM_MYSQL_USER", "BK_IAM_REDIS_MODE", "BK_IAM_REDIS_SENTINEL_ADDR", "BK_IAM_REDIS_SENTINEL_MASTER_NAME", "BK_IAM_REDIS_PASSWORD", "BK_IAM_REDIS_SENTINEL_PASSWORD", "BK_IAM_PRIVATE_ADDR", "BK_IAM_PRIVATE_URL",],
-                'job': ["BK_JOB_MANAGE_MYSQL_HOST", "BK_JOB_MANAGE_MYSQL_PORT", "BK_JOB_MANAGE_MYSQL_USERNAME", "BK_JOB_MANAGE_MYSQL_PASSWORD", "BK_JOB_MANAGE_RABBITMQ_HOST", "BK_JOB_MANAGE_RABBITMQ_PORT", "BK_JOB_MANAGE_RABBITMQ_USERNAME", "BK_JOB_MANAGE_RABBITMQ_PASSWORD", "BK_JOB_MANAGE_RABBITMQ_VHOST", "BK_JOB_MANAGE_REDIS_MODE", "BK_JOB_MANAGE_REDIS_SENTINEL_MASTER", "BK_JOB_MANAGE_REDIS_SENTINEL_NODES", "BK_JOB_MANAGE_REDIS_CLUSTER_NODES", "BK_JOB_MANAGE_REDIS_HOST", "BK_JOB_MANAGE_REDIS_PORT", "BK_JOB_MANAGE_REDIS_PASSWORD", "BK_JOB_LOGSVR_MONGODB_URI", "BK_JOB_MANAGE_REDIS_SENTINEL_PASSWORD"],
-                'cmdb': ["BK_CMDB_REDIS_HOST", "BK_CMDB_REDIS_PORT","BK_CMDB_REDIS_SENTINEL_PASSWORD","BK_HOME", "BK_HTTP_SCHEMA", "BK_PAAS_PUBLIC_ADDR", "BK_PAAS_PRIVATE_ADDR", "BK_CMDB_ADMIN_PORT", "BK_CMDB_API_PORT", "BK_CMDB_AUTH_PORT", "BK_CMDB_CLOUD_PORT", "BK_CMDB_CORE_PORT", "BK_CMDB_DATACOLLECTION_PORT", "BK_CMDB_EVENT_PORT", "BK_CMDB_HOST_PORT", "BK_CMDB_OPERATION_PORT", "BK_CMDB_PROC_PORT", "BK_CMDB_SYNCHRONIZE_PORT", "BK_CMDB_TASK_PORT", "BK_CMDB_TOPO_PORT", "BK_CMDB_WEB_PORT", "BK_CMDB_ES7_REST_ADDR", "BK_CMDB_ES7_USER", "BK_CMDB_ES7_PASSWORD", "BK_CMDB_PUBLIC_URL", "BK_CMDB_API_HOST", "BK_CMDB_API_PRIVATE_ADDR", "BK_CMDB_API_URL", "BK_CMDB_APP_CODE", "BK_CMDB_APP_SECRET", "BK_IAM_PRIVATE_ADDR", "BK_CMDB_MONGODB_HOST", "BK_CMDB_MONGODB_PORT", "BK_CMDB_MONGODB_USERNAME", "BK_CMDB_MONGODB_PASSWORD", "BK_CMDB_REDIS_SENTINEL_HOST", "BK_CMDB_REDIS_SENTINEL_PORT", "BK_CMDB_REDIS_MASTER_NAME", "BK_CMDB_REDIS_PASSWORD", "BK_CMDB_ZK_ADDR",],
-                'bknodeman': ["BK_NODEMAN_MYSQL_HOST", "BK_NODEMAN_MYSQL_NAME", "BK_NODEMAN_MYSQL_PASSWORD", "BK_NODEMAN_MYSQL_PORT", "BK_NODEMAN_MYSQL_USER", "BK_NODEMAN_RABBITMQ_HOST", "BK_NODEMAN_RABBITMQ_PORT", "BK_NODEMAN_RABBITMQ_USERNAME", "BK_NODEMAN_RABBITMQ_PASSWORD", "BK_NODEMAN_RABBITMQ_VHOST", "BK_NODEMAN_REDIS_SENTINEL_HOST", "BK_NODEMAN_REDIS_SENTINEL_PORT", "BK_NODEMAN_REDIS_SENTINEL_MASTER_NAME", "BK_NODEMAN_REDIS_PASSWORD", "BK_NODEMAN_USE_IAM","BK_NODEMAN_REDIS_SENTINEL_PASSWORD"],
-                'bkssm': ["BK_SSM_REDIS_MODE","BK_SSM_MYSQL_HOST", "BK_SSM_MYSQL_PORT", "BK_SSM_MYSQL_USER", "BK_SSM_MYSQL_PASSWORD", "BK_SSM_MYSQL_NAME", "BK_PAAS_MYSQL_HOST", "BK_PAAS_MYSQL_PORT", "BK_PAAS_MYSQL_USER", "BK_PAAS_MYSQL_PASSWORD", "BK_PAAS_MYSQL_NAME", "BK_PAAS_PRIVATE_URL", "BK_SSM_REDIS_MODE", "BK_SSM_REDIS_HOST", "BK_SSM_REDIS_PASSWORD", "BK_SSM_REDIS_SENTINEL_MASTER_NAME", "BK_SSM_REDIS_SENTINEL_PASSWORD", "BK_SSM_REDIS_SENTINEL_ADDR",],
-                "bkmonitorv3": ["BK_GSE_ZK_HOST","BK_GSE_ZK_PORT","BK_MONITOR_MYSQL_HOST","BK_MONITOR_MYSQL_PASSWORD","BK_MONITOR_MYSQL_PORT","BK_MONITOR_MYSQL_USER","BK_PAAS_MYSQL_HOST","BK_PAAS_MYSQL_PASSWORD","BK_PAAS_MYSQL_PORT","BK_PAAS_MYSQL_USER","BK_MONITOR_RABBITMQ_HOST","BK_MONITOR_RABBITMQ_PORT","BK_MONITOR_RABBITMQ_VHOST","BK_MONITOR_RABBITMQ_USERNAME","BK_MONITOR_RABBITMQ_PASSWORD","BK_MONITOR_REDIS_SENTINEL_HOST","BK_MONITOR_REDIS_SENTINEL_PORT","BK_MONITOR_REDIS_SENTINEL_MASTER_NAME","BK_MONITOR_REDIS_PASSWORD","BK_MONITOR_REDIS_SENTINEL_PASSWORD","BK_MONITOR_ES_HOST","BK_MONITOR_ES_REST_PORT","BK_MONITOR_ES7_HOST","BK_MONITOR_ES7_PASSWORD","BK_MONITOR_ES7_REST_PORT","BK_MONITOR_ES7_TRANSPORT_PORT","BK_MONITOR_ES7_USER","BK_INFLUXDB_PROXY_HOST","BK_INFLUXDB_PROXY_PORT","BK_MONITOR_INFLUXDB_PORT","BK_MONITOR_INFLUXDB_USER","BK_MONITOR_INFLUXDB_PASSWORD"],
+                "job": ["BK_JOB_MANAGE_MYSQL_HOST", "BK_JOB_MANAGE_MYSQL_PORT", "BK_JOB_MANAGE_MYSQL_USERNAME", "BK_JOB_MANAGE_MYSQL_PASSWORD", "BK_JOB_MANAGE_RABBITMQ_HOST", "BK_JOB_MANAGE_RABBITMQ_PORT", "BK_JOB_MANAGE_RABBITMQ_USERNAME", "BK_JOB_MANAGE_RABBITMQ_PASSWORD", "BK_JOB_MANAGE_RABBITMQ_VHOST", "BK_JOB_MANAGE_REDIS_MODE", "BK_JOB_MANAGE_REDIS_SENTINEL_MASTER", "BK_JOB_MANAGE_REDIS_SENTINEL_NODES", "BK_JOB_MANAGE_REDIS_CLUSTER_NODES", "BK_JOB_MANAGE_REDIS_HOST", "BK_JOB_MANAGE_REDIS_PORT", "BK_JOB_MANAGE_REDIS_PASSWORD", "BK_JOB_EXECUTE_SERVER_PORT", "BK_JOB_EXECUTE_MYSQL_HOST", "BK_JOB_EXECUTE_MYSQL_PORT", "BK_JOB_EXECUTE_MYSQL_USERNAME", "BK_JOB_EXECUTE_MYSQL_PASSWORD", "BK_JOB_EXECUTE_RABBITMQ_HOST", "BK_JOB_EXECUTE_RABBITMQ_PORT", "BK_JOB_EXECUTE_RABBITMQ_USERNAME", "BK_JOB_EXECUTE_RABBITMQ_PASSWORD", "BK_JOB_EXECUTE_RABBITMQ_VHOST", "BK_JOB_EXECUTE_REDIS_MODE", "BK_JOB_EXECUTE_REDIS_SENTINEL_MASTER", "BK_JOB_EXECUTE_REDIS_SENTINEL_NODES", "BK_JOB_EXECUTE_REDIS_CLUSTER_NODES", "BK_JOB_EXECUTE_REDIS_HOST", "BK_JOB_EXECUTE_REDIS_PORT", "BK_JOB_EXECUTE_REDIS_PASSWORD", "BK_JOB_CRONTAB_SERVER_PORT", "BK_JOB_CRONTAB_MYSQL_HOST", "BK_JOB_CRONTAB_MYSQL_PORT", "BK_JOB_CRONTAB_MYSQL_USERNAME", "BK_JOB_CRONTAB_MYSQL_PASSWORD", "BK_JOB_CRONTAB_RABBITMQ_HOST", "BK_JOB_CRONTAB_RABBITMQ_PORT", "BK_JOB_CRONTAB_RABBITMQ_USERNAME", "BK_JOB_CRONTAB_RABBITMQ_PASSWORD", "BK_JOB_CRONTAB_RABBITMQ_VHOST", "BK_JOB_CRONTAB_REDIS_MODE", "BK_JOB_CRONTAB_REDIS_SENTINEL_MASTER", "BK_JOB_CRONTAB_REDIS_SENTINEL_NODES", "BK_JOB_CRONTAB_REDIS_CLUSTER_NODES", "BK_JOB_CRONTAB_REDIS_HOST", "BK_JOB_CRONTAB_REDIS_PORT", "BK_JOB_CRONTAB_REDIS_PASSWORD", "BK_JOB_LOGSVR_SERVER_PORT", "BK_JOB_LOGSVR_MONGODB_URI", "BK_JOB_BACKUP_SERVER_PORT", "BK_JOB_BACKUP_MYSQL_HOST", "BK_JOB_BACKUP_MYSQL_PORT", "BK_JOB_BACKUP_MYSQL_USERNAME", "BK_JOB_BACKUP_MYSQL_PASSWORD", "BK_JOB_BACKUP_RABBITMQ_HOST", "BK_JOB_BACKUP_RABBITMQ_PORT", "BK_JOB_BACKUP_RABBITMQ_USERNAME", "BK_JOB_BACKUP_RABBITMQ_PASSWORD", "BK_JOB_BACKUP_RABBITMQ_VHOST", "BK_JOB_BACKUP_REDIS_MODE", "BK_JOB_BACKUP_REDIS_SENTINEL_MASTER", "BK_JOB_BACKUP_REDIS_SENTINEL_NODES", "BK_JOB_BACKUP_REDIS_CLUSTER_NODES", "BK_JOB_BACKUP_REDIS_HOST", "BK_JOB_BACKUP_REDIS_PORT", "BK_JOB_BACKUP_REDIS_PASSWORD"],
+                'cmdb': ["BK_CMDB_REDIS_HOST", "BK_CMDB_REDIS_PORT", "BK_HOME", "BK_HTTP_SCHEMA", "BK_PAAS_PUBLIC_ADDR", "BK_PAAS_PRIVATE_ADDR", "BK_CMDB_ADMIN_PORT", "BK_CMDB_API_PORT", "BK_CMDB_AUTH_PORT", "BK_CMDB_CLOUD_PORT", "BK_CMDB_CORE_PORT", "BK_CMDB_DATACOLLECTION_PORT", "BK_CMDB_EVENT_PORT", "BK_CMDB_HOST_PORT", "BK_CMDB_OPERATION_PORT", "BK_CMDB_PROC_PORT", "BK_CMDB_SYNCHRONIZE_PORT", "BK_CMDB_TASK_PORT", "BK_CMDB_TOPO_PORT", "BK_CMDB_WEB_PORT", "BK_CMDB_ES7_REST_ADDR", "BK_CMDB_ES7_USER", "BK_CMDB_ES7_PASSWORD", "BK_CMDB_PUBLIC_URL", "BK_CMDB_API_HOST", "BK_CMDB_API_PRIVATE_ADDR", "BK_CMDB_API_URL", "BK_CMDB_APP_CODE", "BK_CMDB_APP_SECRET", "BK_IAM_PRIVATE_ADDR", "BK_CMDB_MONGODB_HOST", "BK_CMDB_MONGODB_PORT", "BK_CMDB_MONGODB_USERNAME", "BK_CMDB_MONGODB_PASSWORD", "BK_CMDB_REDIS_MASTER_NAME", "BK_CMDB_REDIS_PASSWORD", "BK_CMDB_ZK_ADDR",],
+                'bknodeman': ["BK_NODEMAN_MYSQL_HOST", "BK_NODEMAN_MYSQL_NAME", "BK_NODEMAN_MYSQL_PASSWORD", "BK_NODEMAN_MYSQL_PORT", "BK_NODEMAN_MYSQL_USER", "BK_NODEMAN_RABBITMQ_HOST", "BK_NODEMAN_RABBITMQ_PORT", "BK_NODEMAN_RABBITMQ_USERNAME", "BK_NODEMAN_RABBITMQ_PASSWORD", "BK_NODEMAN_RABBITMQ_VHOST", "BK_NODEMAN_REDIS_HOST", "BK_NODEMAN_REDIS_PORT", "BK_NODEMAN_REDIS_PASSWORD", "BK_NODEMAN_USE_IAM",],
+                'bkssm': ["BK_SSM_REDIS_MODE","BK_SSM_MYSQL_HOST", "BK_SSM_MYSQL_PORT", "BK_SSM_MYSQL_USER", "BK_SSM_MYSQL_PASSWORD", "BK_SSM_MYSQL_NAME", "BK_PAAS_MYSQL_HOST", "BK_PAAS_MYSQL_PORT", "BK_PAAS_MYSQL_USER", "BK_PAAS_MYSQL_PASSWORD", "BK_PAAS_MYSQL_NAME", "BK_PAAS_PRIVATE_URL", "BK_SSM_REDIS_MODE", "BK_SSM_REDIS_HOST", "BK_SSM_REDIS_PASSWORD", "BK_SSM_REDIS_PASSWORD", "BK_SSM_REDIS_ADDR",],
+                "bkmonitorv3": ["BK_GSE_ZK_HOST","BK_GSE_ZK_PORT","BK_MONITOR_MYSQL_HOST","BK_MONITOR_MYSQL_PASSWORD","BK_MONITOR_MYSQL_PORT","BK_MONITOR_MYSQL_USER","BK_PAAS_MYSQL_HOST","BK_PAAS_MYSQL_PASSWORD","BK_PAAS_MYSQL_PORT","BK_PAAS_MYSQL_USER","BK_MONITOR_RABBITMQ_HOST","BK_MONITOR_RABBITMQ_PORT","BK_MONITOR_RABBITMQ_VHOST","BK_MONITOR_RABBITMQ_USERNAME","BK_MONITOR_RABBITMQ_PASSWORD","BK_MONITOR_REDIS_HOST","BK_MONITOR_REDIS_PORT","BK_MONITOR_REDIS_PASSWORD","BK_MONITOR_REDIS_SENTINEL_PASSWORD","BK_MONITOR_ES_HOST","BK_MONITOR_ES_REST_PORT","BK_MONITOR_ES7_HOST","BK_MONITOR_ES7_PASSWORD","BK_MONITOR_ES7_REST_PORT","BK_MONITOR_ES7_TRANSPORT_PORT","BK_MONITOR_ES7_USER","BK_INFLUXDB_PROXY_HOST","BK_INFLUXDB_PROXY_PORT","BK_MONITOR_INFLUXDB_PORT","BK_MONITOR_INFLUXDB_USER","BK_MONITOR_INFLUXDB_PASSWORD"],
                 "fta": ["BK_FTA_MYSQL_HOST","BK_FTA_MYSQL_PASSWORD","BK_FTA_MYSQL_PORT","BK_FTA_MYSQL_USER","BK_FTA_REDIS_HOST","BK_FTA_REDIS_MODE","BK_FTA_REDIS_PASSWORD","BK_FTA_REDIS_PORT","BK_FTA_REDIS_SENTINEL_HOST","BK_FTA_REDIS_SENTINEL_MASTER_NAME","BK_FTA_REDIS_SENTINEL_PORT"],
                 "ci": ["BK_IAM_PRIVATE_URL","BK_CI_MYSQL_ADDR","BK_CI_MYSQL_PASSWORD","BK_CI_MYSQL_USER","BK_CI_RABBITMQ_ADDR","BK_CI_RABBITMQ_VHOST","BK_CI_RABBITMQ_USER","BK_CI_RABBITMQ_PASSWORD","BK_CI_ES_REST_ADDR","BK_CI_ES_REST_PORT","BK_CI_ES_CLUSTER_NAME","BK_CI_ES_USER","BK_CI_ES_PASSWORD","BK_CI_REDIS_HOST","BK_CI_REDIS_PORT","BK_CI_REDIS_DB","BK_CI_REDIS_PASSWORD"],
                 "gse": ["BK_GSE_MONGODB_HOST", "BK_GSE_MONGODB_PORT", "BK_GSE_MONGODB_USERNAME", "BK_GSE_MONGODB_PASSWORD", "BK_GSE_REDIS_PASSWORD", "BK_GSE_REDIS_PORT", "BK_GSE_ZK_HOST", "BK_GSE_ZK_PORT", "BK_GSE_ZK_ADDR", "BK_GSE_ZK_AUTH" ]
-}
+                }
 
 class API(object):
     '''
@@ -73,11 +73,11 @@ class Storage_Check(object):
     '''
     description: 存储相关通用检测函数
     '''    
-    def __init__(self, username: str, password: str, ssh_port: int):
+    def __init__(self, username: str, password: str, port: int):
         self.api = API()
         self.username = username
         self.password = password
-        self.ssh_port = ssh_port
+        self.port = port
 
     def common_env(self, env_list: list):
         '''
@@ -120,9 +120,9 @@ class Storage_Check(object):
                 client.set_missing_host_key_policy(AutoAddPolicy())
                 client.load_system_host_keys()
                 if grant_ip == self.get_lan_ip():
-                    client.connect(grant_ip.replace('\'',''), timeout=20,username=username, password=password, port=self.ssh_port)
+                    client.connect(grant_ip.replace('\'',''), timeout=20,username=username, password=password, port=self.port)
                 else:
-                    client.connect(grant_ip.replace('\'',''), timeout=20, port=self.ssh_port)
+                    client.connect(grant_ip.replace('\'',''), timeout=20, port=self.port)
                 if if_install_mysql_client:
                     stdin1, stdout2, stderr2 = client.exec_command("yum install -q -y mysql-community-client")
                     if not stdout2:
@@ -394,7 +394,6 @@ class Action(Storage_Check):
     '''
     description:  根据模块执行检查
     '''
-
     def gse(self):
         gse_check_env_dict = self.common_env(environ_list['gse'])
         self.mongodb_check(
@@ -495,10 +494,9 @@ class Action(Storage_Check):
         self.check_redis_by_get_mastername(
             module = 'monitorv3',
             single_password = monitorv3_check_env_dict['BK_MONITOR_REDIS_PASSWORD'],
-            sentinel_host = monitorv3_check_env_dict['BK_MONITOR_REDIS_SENTINEL_HOST'],
-            sentinel_password = monitorv3_check_env_dict['BK_MONITOR_REDIS_SENTINEL_PASSWORD'],
-            sentinel_port = monitorv3_check_env_dict['BK_MONITOR_REDIS_SENTINEL_PORT'],
-            master_name = monitorv3_check_env_dict['BK_MONITOR_REDIS_SENTINEL_MASTER_NAME'],
+            single_host = monitorv3_check_env_dict['BK_MONITOR_REDIS_HOST'],
+            single_port = monitorv3_check_env_dict['BK_MONITOR_REDIS_PORT'],
+            IS_SENTINEL = False
         )       
         monitorv3_ip = re.split(',', os.environ['BK_MONITORV3_IP_COMMA'])
         self.mysql_login_check(
@@ -546,19 +544,13 @@ class Action(Storage_Check):
     def ssm(self):
         ssm_check_env_dict = self.common_env(environ_list['bkssm'])
         # redis
-        single_host, single_port = re.split(':', ssm_check_env_dict['BK_SSM_REDIS_SENTINEL_ADDR'])
-        sentinel_host, sentinel_port = re.split(':', ssm_check_env_dict['BK_SSM_REDIS_SENTINEL_ADDR'])
-        is_sentinel = False if  ssm_check_env_dict["BK_SSM_REDIS_MODE"] != "sentinel" else True
+        single_host, single_port = re.split(':', ssm_check_env_dict['BK_SSM_REDIS_ADDR'])
         self.check_redis_by_get_mastername(
             module = 'ssm',
             single_host = single_host,
             single_port = single_port,
             single_password = ssm_check_env_dict['BK_SSM_REDIS_PASSWORD'],
-            sentinel_port = sentinel_port,
-            sentinel_password = ssm_check_env_dict['BK_SSM_REDIS_SENTINEL_PASSWORD'],
-            sentinel_host = sentinel_host,
-            master_name = ssm_check_env_dict['BK_SSM_REDIS_SENTINEL_MASTER_NAME'],
-            IS_SENTINEL = is_sentinel
+            IS_SENTINEL = False
         )
         # mysql 
         ssm_ip = re.split(',', os.environ['BK_SSM_IP_COMMA'])
@@ -599,14 +591,12 @@ class Action(Storage_Check):
             vhost = nodeman_check_env_dict['BK_NODEMAN_RABBITMQ_VHOST'],
             module = 'bknodeman'
         )
-        is_sentinel = False if nodeman_check_env_dict["BK_NODEMAN_REDIS_SENTINEL_MASTER_NAME"] == None else True
         self.check_redis_by_get_mastername(
             module = 'bknodeman',
-            sentinel_password = nodeman_check_env_dict['BK_NODEMAN_REDIS_SENTINEL_PASSWORD'],
-            sentinel_host = nodeman_check_env_dict['BK_NODEMAN_REDIS_SENTINEL_HOST'],
-            sentinel_port = nodeman_check_env_dict['BK_NODEMAN_REDIS_SENTINEL_PORT'],
-            master_name = nodeman_check_env_dict['BK_NODEMAN_REDIS_SENTINEL_MASTER_NAME'],
-            IS_SENTINEL = is_sentinel
+            single_password = nodeman_check_env_dict['BK_NODEMAN_REDIS_PASSWORD'],
+            single_host = nodeman_check_env_dict['BK_NODEMAN_REDIS_HOST'],
+            single_port = nodeman_check_env_dict['BK_NODEMAN_REDIS_PORT'],
+            IS_SENTINEL = False
         )
     
     def paas(self):
@@ -640,18 +630,18 @@ class Action(Storage_Check):
             )
         except Exception as e:
             logg.error("module -> [{}] mysql grant check failed! msg -> [{}]".format("paas", traceback.format_exc()))
-        
-        es7_addr = paas_check_env_dict['BK_PAAS_ES7_ADDR'] 
-        username, password = es7_addr.split('@')[0].split(':')
-        host, port = es7_addr.split('@')[1].split(':')
+         # 社区不使用到 paas_plugin 所以不用 es        
+#        es7_addr = paas_check_env_dict['BK_PAAS_ES7_ADDR'] 
+#        username, password = es7_addr.split('@')[0].split(':')
+#       host, port = es7_addr.split('@')[1].split(':')
 
-        self.elasticsearch7_check(
-            host = host,
-            port = port,
-            module = "paas",
-            username = username,
-            password = password
-        )
+#        self.elasticsearch7_check(
+#            host = host,
+#            port = port,
+#            module = "paas",
+#            username = username,
+#            password = password
+#        )
 
     def usermgr(self):
         usermgr_check_env_dict = self.common_env(environ_list['usermgr'])
@@ -763,14 +753,11 @@ class Action(Storage_Check):
 
         # redis sentinel check
         self.check_redis_by_get_mastername(
-            sentinel_host = cmdb_check_env_dict['BK_CMDB_REDIS_SENTINEL_HOST'],
-            sentinel_port =  cmdb_check_env_dict["BK_CMDB_REDIS_SENTINEL_PORT"],
-            master_name = cmdb_check_env_dict['BK_CMDB_REDIS_MASTER_NAME'],
-            sentinel_password = cmdb_check_env_dict["BK_CMDB_REDIS_SENTINEL_PASSWORD"],
             module = "cmdb",
             single_password = cmdb_check_env_dict['BK_CMDB_REDIS_PASSWORD'],
             single_host = cmdb_check_env_dict['BK_CMDB_REDIS_HOST'],
             single_port = cmdb_check_env_dict['BK_CMDB_REDIS_PORT'], 
+            IS_SENTINEL=False
         ) 
 
         # cmdb mongodb check
@@ -810,16 +797,47 @@ class Action(Storage_Check):
             module = 'job' 
         )
         # job manage redis sentinel check
-        manage_sentinel_host, manage_sentinel_port= re.split(":", job_check_env_dict["BK_JOB_MANAGE_REDIS_SENTINEL_NODES"])
+        manage_single_host, manage_single_port= re.split(":", job_check_env_dict["BK_JOB_MANAGE_REDIS_SENTINEL_NODES"])
         is_sentinel = True if job_check_env_dict['BK_JOB_MANAGE_REDIS_SENTINEL_MASTER'] != 'None' else False
         self.check_redis_by_get_mastername(
-            sentinel_host = manage_sentinel_host,
-            sentinel_port = manage_sentinel_port,
+            single_host = manage_single_host,
+            single_port = manage_single_port,
             master_name = job_check_env_dict['BK_JOB_MANAGE_REDIS_SENTINEL_MASTER'],
-            sentinel_password = job_check_env_dict["BK_JOB_MANAGE_REDIS_SENTINEL_PASSWORD"],
-            IS_SENTINEL = is_sentinel,
-            module = 'job',
+            single_password = job_check_env_dict["BK_JOB_MANAGE_REDIS_PASSWORD"],
+            IS_SENTINEL = False,
+            module = 'job-manage',
+        )
+        # job execute redis sentinel check
+        manage_single_host, manage_single_port= re.split(":", job_check_env_dict["BK_JOB_EXECUTE_REDIS_SENTINEL_NODES"])
+        self.check_redis_by_get_mastername(
+            single_host = manage_single_host, 
+            single_port = int(manage_single_port),
+            master_name = job_check_env_dict['BK_JOB_EXECUTE_REDIS_SENTINEL_MASTER'],
+            single_password = job_check_env_dict["BK_JOB_EXECUTE_REDIS_PASSWORD"],
+            IS_SENTINEL = False,
+            module = 'job-execute',
+        )
 
+        # job backup redis sentinel check
+        manage_single_host, manage_single_port= re.split(":", job_check_env_dict["BK_JOB_BACKUP_REDIS_SENTINEL_NODES"])
+        self.check_redis_by_get_mastername(
+            single_host = manage_single_host,
+            single_port = int(manage_single_port),
+            master_name = job_check_env_dict['BK_JOB_BACKUP_REDIS_SENTINEL_MASTER'],
+            single_password = job_check_env_dict["BK_JOB_BACKUP_REDIS_PASSWORD"],
+            IS_SENTINEL = False,
+            module = 'job-backup',
+        )
+        
+        # job crontab redis sentinel check
+        manage_single_host, manage_single_port= re.split(":", job_check_env_dict["BK_JOB_CRONTAB_REDIS_SENTINEL_NODES"])
+        self.check_redis_by_get_mastername(
+            single_host = manage_single_host,
+            single_port = int(manage_single_port),
+            master_name = job_check_env_dict['BK_JOB_CRONTAB_REDIS_SENTINEL_MASTER'],
+            single_password = job_check_env_dict["BK_JOB_CRONTAB_REDIS_PASSWORD"],
+            IS_SENTINEL = False,
+            module = 'job-crontab',
         )
 
         # mysql
@@ -831,14 +849,38 @@ class Action(Storage_Check):
             grant_user_pass = job_check_env_dict['BK_JOB_MANAGE_MYSQL_PASSWORD'],
             grant_host = job_ip 
         )
+        self.mysql_login_check(
+            module = "job-execute", 
+            mysql_host = job_check_env_dict['BK_JOB_EXECUTE_MYSQL_HOST'],
+            mysql_port = job_check_env_dict['BK_JOB_EXECUTE_MYSQL_PORT'],
+            grant_user = job_check_env_dict['BK_JOB_EXECUTE_MYSQL_USERNAME'],
+            grant_user_pass = job_check_env_dict['BK_JOB_EXECUTE_MYSQL_PASSWORD'],
+            grant_host = job_ip 
+        )
+        self.mysql_login_check(
+            module = "job-crontab", 
+            mysql_host = job_check_env_dict['BK_JOB_CRONTAB_MYSQL_HOST'],
+            mysql_port = job_check_env_dict['BK_JOB_CRONTAB_MYSQL_PORT'],
+            grant_user = job_check_env_dict['BK_JOB_CRONTAB_MYSQL_USERNAME'],
+            grant_user_pass = job_check_env_dict['BK_JOB_CRONTAB_MYSQL_PASSWORD'],
+            grant_host = job_ip 
+        )
+        self.mysql_login_check(
+            module = "job-backup", 
+            mysql_host = job_check_env_dict['BK_JOB_BACKUP_MYSQL_HOST'],
+            mysql_port = job_check_env_dict['BK_JOB_BACKUP_MYSQL_PORT'],
+            grant_user = job_check_env_dict['BK_JOB_BACKUP_MYSQL_USERNAME'],
+            grant_user_pass = job_check_env_dict['BK_JOB_BACKUP_MYSQL_PASSWORD'],
+            grant_host = job_ip 
+        )
 
         # 太麻烦了rabbitmq检查一次
         self.rabbitmq_check(
-            host = job_check_env_dict['BK_JOB_MANAGE_RABBITMQ_HOST'],
-            port = job_check_env_dict['BK_JOB_MANAGE_RABBITMQ_PORT'],
-            username = job_check_env_dict['BK_JOB_MANAGE_RABBITMQ_USERNAME'],
-            password = job_check_env_dict['BK_JOB_MANAGE_RABBITMQ_PASSWORD'],
-            vhost = job_check_env_dict['BK_JOB_MANAGE_RABBITMQ_VHOST'],
+            host = job_check_env_dict['BK_JOB_BACKUP_RABBITMQ_HOST'],
+            port = job_check_env_dict['BK_JOB_BACKUP_RABBITMQ_PORT'],
+            username = job_check_env_dict['BK_JOB_BACKUP_RABBITMQ_USERNAME'],
+            password = job_check_env_dict['BK_JOB_BACKUP_RABBITMQ_PASSWORD'],
+            vhost = job_check_env_dict['BK_JOB_BACKUP_RABBITMQ_VHOST'],
             module = 'job'
         )
         
@@ -1057,7 +1099,7 @@ if __name__ == "__main__":
     p.add_argument('-d', action='store', dest='env_dir', help='final directory')
     p.add_argument('-u', action='store', dest='ssh_username', default="root", help='ssh username')
     p.add_argument('-p', action='store', dest='ssh_password', help='ssh password') 
-    p.add_argument('-P', action='store', dest='ssh_port', help='ssh password', default=22) 
+    p.add_argument('-P', action='store', dest='ssh_port', default=22, help='ssh port') 
     p.add_argument('-m', action='store', dest='module', help="检查的模块: ps: cmdb,job,paas")
     p.add_argument('-a', action='store', dest="specified_env_file", default="/data/install/bin/01-generate/dbadmin.env", help="like dbadmin.env")
     p.add_argument('-o', action='store', dest="host_env_file", default="/data/install/bin/02-dynamic/hosts.env", help="hosts env file")

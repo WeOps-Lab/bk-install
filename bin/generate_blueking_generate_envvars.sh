@@ -3,6 +3,7 @@
 
 # 读入基础配置
 SELF_DIR=$(dirname "$(readlink -f "$0")")
+source $BK_PKG_SRC_PATH/blueking.env
 
 #####
 # 自动协助生成变量
@@ -12,14 +13,11 @@ SELF_DIR=$(dirname "$(readlink -f "$0")")
 # 输出：作业平台需要的通信用的ssl证书密码
 gen_cert_passwd_var () {
     local gse_pass job_pass
-    if [[ -d $BK_CERT_PATH ]];then
-        gse_pass=$(awk '$1 == "gse_job_api_client.p12" {print $NF}' "$BK_CERT_PATH"/passwd.txt)
-        job_pass=$(awk '$1 == "job_server.p12" {print $NF}' "$BK_CERT_PATH"/passwd.txt)
-    else
-        source ~/.bkrc
-        gse_pass=$(awk '$1 == "gse_job_api_client.p12" {print $NF}' "$BK_PKG_SRC_PATH"/cert/passwd.txt)
-        job_pass=$(awk '$1 == "job_server.p12" {print $NF}' "$BK_PKG_SRC_PATH"/cert/passwd.txt)
-    fi
+#    gse_pass=$(awk '$1 == "gse_job_api_client.p12" {print $NF}' "$BK_CERT_PATH"/passwd.txt)
+#    job_pass=$(awk '$1 == "job_server.p12" {print $NF}' "$BK_CERT_PATH"/passwd.txt)
+    gse_pass=${GSE_KEYTOOL_PASS}
+    job_pass=${JOB_KEYTOOL_PASS}    
+
     if [[ -z $BK_GSE_SSL_KEYSTORE_PASSWORD || -z $BK_JOB_GATEWAY_SERVER_SSL_TRUSTSTORE_PASSWORD ]]; then
         cat <<EOF
 BK_GSE_SSL_KEYSTORE_PASSWORD='$gse_pass'
@@ -98,7 +96,7 @@ gen_redis_password () {
     local k=${prefix}_REDIS_PASSWORD
     local tmp=${prefix/BK_/}
     local y=BK_REDIS_${tmp}_IP0
-    local z=BK_REDIS_SENTINEL_${tmp}_IP0
+    local z=BK_REDIS_CLUSTER_${tmp}_IP0
     if [[ -r "$SELF_DIR"/01-generate/dbadmin.env ]]; then 
         source "$SELF_DIR"/01-generate/dbadmin.env
     fi
@@ -120,22 +118,22 @@ EOF
 
 # random password
 # default length: 12
-# default character list: [[:alnum:]] + '_'
+# default character list: [[:alnum:]] + '_-'
 # Usage: rndpw 20 $'!@#$%^<>()[]'
 rndpw () {
-    tr -dc _A-Za-z0-9"$2" </dev/urandom | head -c"${1:-12}"
+    </dev/urandom tr -dc _A-Za-z0-9"$2" | head -c"${1:-12}"
 }
 
 
 case $1 in 
     paas_plugins)
+        # 跟paas共用单节点redis
         if [[ -r "$SELF_DIR"/01-generate/dbadmin.env ]]; then
             source "$SELF_DIR"/01-generate/dbadmin.env
         fi
         if [[ -r "$SELF_DIR"/04-final/paas_plugins.env ]]; then
             source "$SELF_DIR"/04-final/paas_plugins.env
         fi
-        # 跟paas共用单节点redis
         if [[ -z "$BK_PAAS_PLUGINS_REDIS_PASSWORD" ]]; then
             printf "%s=%q\n" "BK_PAAS_PLUGINS_REDIS_PASSWORD" "$BK_REDIS_ADMIN_PASSWORD"
         fi
@@ -160,8 +158,8 @@ case $1 in
         fi
         gen_mysql_password BK_USERMGR "$(rndpw 12)"
         gen_rabbitmq_password BK_USERMGR "$(rndpw 12)"
-        if [[ -z "$BK_USERMGR_REDIS_SENTINEL_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_USERMGR_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
+        if [[ -z "$BK_USERMGR_REDIS_PASSWORD" ]]; then
+            printf "%s=%q\n" "BK_USERMGR_REDIS_PASSWORD" "$BK_REDIS_ADMIN_PASSWORD"
         fi
         ;;
     paas)
@@ -172,17 +170,18 @@ case $1 in
             source "$SELF_DIR"/04-final/paas.env
         fi
         if [[ -z $BK_PAAS_ESB_SECRET_KEY ]]; then
-            printf "%s=%q\n" "BK_PAAS_ESB_SECRET_KEY" "$(rndpw 51)"
+            printf "%s=%q\n" "BK_PAAS_ESB_SECRET_KEY" "$(rndpw 12)"
         fi
         # paas的app_code是代码写死为bk_paas/bk_console/bk_paas_plugins等，但是需要对应同样的APP_SECRET
         str=$(gen_app_token_def bk_paas)
         eval "$str"
         [[ -n "$str" ]] && echo "$str"
+
         if [[ -z "$BK_PAAS_REDIS_PASSWORD" ]]; then
             printf "%s=%q\n" "BK_PAAS_REDIS_PASSWORD" "$BK_REDIS_ADMIN_PASSWORD"
         fi
         gen_mysql_password BK_PAAS "$(rndpw 12)"
-
+        
         if [[ -z "$BK_PAAS_ES7_ADDR" ]];then
             printf "%s=%q\n" "BK_PAAS_ES7_ADDR" "elastic:${BK_ES7_ADMIN_PASSWORD}@es7.service.consul:9200"
         fi
@@ -207,10 +206,6 @@ case $1 in
         if [[ -z "$BK_CMDB_REDIS_PASSWORD" ]]; then
             printf "%s=%q\n" "BK_CMDB_REDIS_PASSWORD" "$BK_REDIS_ADMIN_PASSWORD"
         fi
-#        gen_redis_password BK_CMDB "$(rndpw 12)"
-        if [[ -z "$BK_CMDB_REDIS_SENTINEL_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_CMDB_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
-        fi
         ;;
     gse)
         if [[ -r "$SELF_DIR"/01-generate/dbadmin.env ]]; then
@@ -228,7 +223,7 @@ case $1 in
             printf "%s=%q\n" "BK_GSE_MONGODB_PASSWORD" "$(rndpw 12)"
         fi
         if [[ -z "$BK_GSE_REDIS_PASSWORD" ]]; then
-            gen_redis_password "BK_GSE" "${redis_password}"
+            gen_redis_password "BK_GSE" "${redis_pwd}"
         fi
         if [[ -z "$BK_GSE_ZK_AUTH" ]]; then
             printf "%s=%q\n" "BK_GSE_ZK_AUTH" "zkuser:$(rndpw 12)"
@@ -259,13 +254,13 @@ case $1 in
             gen_mysql_password "$m" "$mysql_password"
             gen_rabbitmq_password "$m" "$rabbitmq_password"
             gen_redis_password "$m" "$BK_REDIS_ADMIN_PASSWORD"
+
         done
 
         #mongod(新增的)
         if [[ -z "$BK_JOB_LOGSVR_MONGODB_URI" ]]; then
-            printf "%s=%s\n" "BK_JOB_LOGSVR_MONGODB_URI" "mongodb://joblog:$(rndpw 8 )@mongodb-job.service.consul:27017/joblog?replicaSet=rs0"
+            printf "%s=%s\n" "BK_JOB_LOGSVR_MONGODB_URI" "mongodb://joblog:$(rndpw 8 )@mongodb.service.consul:27017/joblog?replicaSet=rs0"
         fi
-
         # actuator密码（获取metrics等信息）
         if [[ -z "$BK_JOB_ACTUATOR_PASSWORD" ]]; then
             printf "%s=%s\n" BK_JOB_ACTUATOR_PASSWORD "$(rndpw 12)"
@@ -277,21 +272,6 @@ case $1 in
         fi
         if [[ -z "$BK_JOB_MANAGE_SERVER_HOST0" ]]; then
             printf "%s=%q\n" "BK_JOB_MANAGE_SERVER_HOST0" "$BK_JOB_IP0"
-        fi
-        if [[ -z "$BK_JOB_MANAGE_REDIS_SENTINEL_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_JOB_MANAGE_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
-        fi
-        if [[ -z "$BK_JOB_EXECUTE_REDIS_SENTINEL_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_JOB_EXECUTE_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
-        fi
-        if [[ -z "$BK_JOB_CRONTAB_REDIS_SENTINEL_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_JOB_CRONTAB_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
-        fi
-        if [[ -z "$BK_JOB_BACKUP_REDIS_SENTINEL_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_JOB_BACKUP_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
-        fi
-        if [[ -z "$BK_JOB_ANALYSIS_REDIS_SENTINEL_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_JOB_ANALYSIS_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
         fi
         ;;
     bkssm)
@@ -330,8 +310,8 @@ case $1 in
         if [[ -z "$BK_AUTH_MYSQL_PASSWORD" ]]; then
             printf "%s=%q\n" "BK_AUTH_MYSQL_PASSWORD" "$(rndpw 12)"
         fi
-        if [[ -z "$BK_AUTH_REDIS_SENTINEL_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_AUTH_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
+        if [[ -z "$BK_AUTH_REDIS_PASSWORD" ]]; then
+            printf "%s=%q\n" "BK_AUTH_REDIS_PASSWORD" "$BK_REDIS_ADMIN_PASSWORD"
         fi
         ;;
     bkiam)
@@ -341,14 +321,14 @@ case $1 in
         if [[ -r "$SELF_DIR"/04-final/bkiam.env ]]; then
             source "$SELF_DIR"/04-final/bkiam.env
         fi
+        # ssm和iam共享mysql和redis，所以一起生成
+        mysql_pwd=$(rndpw 12)
+        redis_pwd=$(rndpw 12)
         if [[ -z "$BK_IAM_MYSQL_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_IAM_MYSQL_PASSWORD" "$(rndpw 12)"
+            printf "%s=%q\n" "BK_IAM_MYSQL_PASSWORD" "$mysql_pwd"
         fi
-        if [[ -z "$BK_IAM_MYSQL_PASSWORD" ]]; then
-            gen_redis_password "BK_IAM" "$(rndpw 12)"
-        fi
-        if [[ -z "$BK_IAM_REDIS_SENTINEL_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_IAM_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
+        if [[ -z "$BK_IAM_REDIS_PASSWORD" ]]; then
+            gen_redis_password "BK_IAM" "${redis_pwd}"
         fi
         ;;
     bkiam_search_engine)
@@ -385,8 +365,8 @@ case $1 in
         if [[ -z "$BK_NODEMAN_REDIS_PASSWORD" ]]; then
             gen_redis_password "BK_NODEMAN" "${redis_pwd}"
         fi
-        if [[ -z "$BK_NODEMAN_REDIS_SENTINEL_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_NODEMAN_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
+        if [[ -z "$BK_NODEMAN_REDIS_HOST" ]]; then
+            printf "%s=%q\n" "BK_NODEMAN_REDIS_HOST" "$BK_REDIS_IP0"
         fi
 
         ;;
@@ -394,9 +374,11 @@ case $1 in
         if [[ -r "$SELF_DIR"/01-generate/dbadmin.env ]]; then
             source "$SELF_DIR"/01-generate/dbadmin.env
         fi
+        set -a 
         if [[ -r "$SELF_DIR"/04-final/bkmonitorv3.env ]]; then
             source "$SELF_DIR"/04-final/bkmonitorv3.env
         fi
+        set +a
         redis_pwd=$(rndpw 12)
 
         if [[ -z "$BK_MONITOR_APP_CODE" || -z "$BK_MONITOR_APP_SECRET" ]]; then
@@ -410,25 +392,25 @@ case $1 in
             printf "%s=%q\n" "BK_MONITOR_RABBITMQ_PASSWORD" "$(rndpw 12)"
         fi
         if [[ -z "$BK_MONITOR_ES7_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_MONITOR_ES7_PASSWORD" "$BK_ES7_ADMIN_PASSWORD"
+            printf "%s=%q\n" "BK_MONITOR_ES7_PASSWORD" $BK_ES7_ADMIN_PASSWORD
         fi
         if [[ -z "$BK_MONITOR_REDIS_PASSWORD" ]]; then
             gen_redis_password "BK_MONITOR" "${redis_pwd}"
         fi
-        if [[ -z "$BK_MONITOR_REDIS_SENTINEL_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_MONITOR_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
-        fi
         if [[ -z $BK_MONITOR_INFLUXDB_USER ]];then
-            printf "%s=%q\n" "BK_MONITOR_INFLUXDB_USER" "$BK_INFLUXDB_ADMIN_USER"
+            printf "%s=%q\n" "BK_MONITOR_INFLUXDB_USER" ${BK_INFLUXDB_ADMIN_USER}
         fi
         if [[ -z $BK_MONITOR_INFLUXDB_PASSWORD ]];then
-            printf "%s=%q\n" "BK_MONITOR_INFLUXDB_PASSWORD" "$BK_INFLUXDB_ADMIN_PASSWORD"
+            printf "%s=%q\n" "BK_MONITOR_INFLUXDB_PASSWORD" ${BK_INFLUXDB_ADMIN_PASSWORD}
         fi
         if [[ -z "$BK_MONITOR_TRANSFER_REDIS_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_MONITOR_TRANSFER_REDIS_PASSWORD" "$BK_REDIS_ADMIN_PASSWORD"
+            printf "%s=%q\n" "BK_MONITOR_TRANSFER_REDIS_PASSWORD" $BK_REDIS_ADMIN_PASSWORD
         fi
         if [[ -z "$BK_MONITOR_TRANSFER_REDIS_SENTINEL_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_MONITOR_TRANSFER_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
+            printf "%s=%q\n" "BK_MONITOR_TRANSFER_REDIS_SENTINEL_PASSWORD" $BK_REDIS_SENTINEL_PASSWORD
+        fi
+        if [[ -z "$BK_MONITOR_ALERT_ES7_PASSWORD" ]]; then
+            printf "%s=%q\n" "BK_MONITOR_ALERT_ES7_PASSWORD" $BK_ES7_ADMIN_PASSWORD
         fi
         ;;
     bklog)
@@ -446,9 +428,6 @@ case $1 in
         fi
         if [[ -z "$BK_BKLOG_REDIS_PASSWORD" ]]; then
             gen_redis_password "BK_BKLOG" "${redis_pwd}"
-        fi
-        if [[ -z "$BK_BKLOG_REDIS_SENTINEL_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_BKLOG_REDIS_SENTINEL_PASSWORD" "$BK_REDIS_SENTINEL_PASSWORD"
         fi
         ;;
     lesscode)
@@ -496,12 +475,14 @@ case $1 in
         if [[ -z "$BK_RABBITMQ_ADMIN_USER" ]]; then
             printf "%s=%q\n" BK_RABBITMQ_ADMIN_USER admin
         fi
-        if [[ -z "$BK_RABBITMQ_ADMIN_PASSWORD" ]]; then
-            printf "%s=%q\n" BK_RABBITMQ_ADMIN_PASSWORD "$(rndpw 12)"
-        fi
         # # redis sentinel共用，所以密码统一生成一次即可。
+        # if [[ -z "$BK_REDIS_SENTINEL_PASSWORD" ]]; then
+        #     printf "%s=%q\n" BK_REDIS_SENTINEL_PASSWORD "$(rndpw 12)"
+        # fi
+        # 还有产品不支持加密sentinel。
         if [[ -z "$BK_REDIS_SENTINEL_PASSWORD" ]]; then
-            printf "%s=%q\n" BK_REDIS_SENTINEL_PASSWORD "$(rndpw 12)"
+            # printf "%s=%q\n" BK_REDIS_SENTINEL_PASSWORD " "
+            echo "BK_REDIS_SENTINEL_PASSWORD="
         fi
         if [[ -z "$BK_REDIS_ADMIN_PASSWORD" ]]; then
             printf "%s=%q\n" BK_REDIS_ADMIN_PASSWORD "$(rndpw 12)"
@@ -527,7 +508,7 @@ case $1 in
             printf "%s=%q\n" "BK_FTA_MYSQL_PASSWORD"  "$(rndpw 12)"
         fi
         if [[ -z "$BK_FTA_REDIS_PASSWORD" ]]; then
-            printf "%s=%q\n" "BK_FTA_REDIS_PASSWORD" "$BK_REDIS_ADMIN_PASSWORD"
+            gen_redis_password "BK_FTA" "${redis_pwd}"
         fi
         if [[ -z "$BK_FTA_APP_SECRET" ]]; then
             printf "%s=%q\n" "BK_FTA_APP_SECRET" "$(rndpw 12)"
@@ -540,16 +521,14 @@ case $1 in
         if [[ -r "$SELF_DIR"/04-final/bkapigw.env ]]; then
             source "$SELF_DIR"/04-final/bkapigw.env
         fi
-        source "$SELF_DIR/04-final/global.env"
         if [[ -z "$BK_APIGW_ENCRYPT_KEY" ]]; then
             printf "%s=%q\n" "BK_APIGW_ENCRYPT_KEY"  "$(rndpw 32 | base64)"
         fi
         if [[ -z "$BK_APIGW_APP_SECRET" ]]; then
             printf "%s=%q\n" "BK_APIGW_APP_SECRET" "$(uuid -v4)"
-
         fi
         if [[ -z "$BK_APIGW_TEST_APP_SECRET" ]]; then
-            printf "%s=%q\n" "BK_APIGW_TEST_APP_SECRET" "$(uuid -v4)" 
+            printf "%s=%q\n" "BK_APIGW_TEST_APP_SECRET" "$(uuid -v4)"
         fi
         if [[ -z "$BK_APIGW_MYSQL_PASSWORD" ]]; then
             printf "%s=%q\n" "BK_APIGW_MYSQL_PASSWORD"  "$(rndpw 16)"

@@ -55,7 +55,7 @@ usage () {
             [ -d, --release-dir     [可选] "$MODULE安装包存放目录，默认是$RELEASE_DIR" ]
             [ -f, --filename        [必选] "安装包名，不带路径" ]
     
-    2. 使用中控机解压后的$MODULE_SRC_DIR/{module} 来更新: 需要指定以下参数
+    2. 使用中控机解压后的$BK_PKG_SRC_PATH/{module} 来更新: 需要指定以下参数
             [ -s, --srcdir      [可选] "从该目录拷贝$MODULE/目录到--prefix指定的目录" ]
     
     如果以上三个参数都指定了，会以tgz包的参数优先使用，忽略-s指定的目录

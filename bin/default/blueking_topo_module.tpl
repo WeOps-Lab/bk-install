@@ -9,19 +9,19 @@ jobv3	job-backup
 jobv3	job-analysis
 cmdb	cmdb-admin
 cmdb	cmdb-api
+cmdb	cmdb-auth
+cmdb	cmdb-cloud
+cmdb	cmdb-cache
 cmdb	cmdb-core
 cmdb	cmdb-datacollection
 cmdb	cmdb-event
 cmdb	cmdb-host
 cmdb	cmdb-op
 cmdb	cmdb-proc
+cmdb	cmdb-synchronize
 cmdb	cmdb-task
 cmdb	cmdb-topo
 cmdb	cmdb-web
-cmdb	cmdb-cloud
-cmdb	cmdb-auth
-cmdb	cmdb-synchronize
-cmdb	cmdb-cache
 	
 monitor	transfer
 monitor	influxdb-proxy
@@ -52,7 +52,6 @@ public	redis
 public	zookeeper
 public 	openresty
 public 	consul-template
-public 	redis_sentinel
 public 	beanstalk
 	
 nodeman	nodeman-api
@@ -63,10 +62,9 @@ paas 	appengine
 paas 	paas
 paas 	esb
 paas 	login
-paas 	console
+paas 	apigw
 paas 	appo
 paas 	appt
-paas 	apigw
 	
 log	bklog-api
 log	bklog-grafana
@@ -76,5 +74,5 @@ user	bk-ssm
 user	usermgr
 user	bkiam-search-engine
 	
-bcs	bcs
+bcs 	bcs
 	

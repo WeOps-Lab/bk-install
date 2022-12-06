@@ -43,9 +43,6 @@ _bkc () {
 # 检查协议
 check_agreement || exit 1
 
-# 检查Shell
-shell_type_check 
-
 case $service in
     common)
         _bkc install controller
@@ -68,16 +65,11 @@ case $service in
         _bkc install license
         _bkc install mysql
         _bkc install redis
-        _bkc install redis_sentinel
         _bkc start mysql
         _bkc install nginx
-        source ${SELF_DIR}/load_env.sh
-        if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
-            _bkc install nfs
-        fi
+
         _bkc start license
         _bkc start redis
-        _bkc start redis_sentinel
         _bkc start nginx
 
         _bkc sync bkiam
@@ -99,7 +91,6 @@ case $service in
         _bkc start usermgr
         _bkc initdata paas
 
-        ./bkcli status redis_sentinel
         for svs in redis nginx mysql paas iam usermgr; do
             ./bkcli status $svs
         done
@@ -113,25 +104,21 @@ case $service in
 
         echo ""
         echo "如果以上步骤执行没有报错, 说明你已经完成蓝鲸 PaaS 平台的部署, 现在可以通过 $(green_echo $BK_PAAS_PUBLIC_URL) 进行访问, 并请按照文档继续执行剩余步骤"
-        echo "登陆用户名(login user): $(green_echo $BK_PAAS_ADMIN_USERNAME)"
-        echo "登陆密码(login password): $(green_echo $BK_PAAS_ADMIN_PASSWORD)"
+        echo "登陆用户名(login user): $(green_echo "$BK_PAAS_ADMIN_USERNAME")"
+        echo "登陆密码(login password): $(green_echo "$BK_PAAS_ADMIN_PASSWORD")"
         echo 
         ;;
     bkauth)
         _bkc install redis
-        _bkc install redis_sentinel
         _bkc start redis
-        _bkc start redis_sentinel
         _bkc sync bkauth
         _bkc install bkauth
         _bkc start bkauth
         ;;
     cmdb)
         _bkc install redis
-        _bkc install redis_sentinel
         _bkc install nginx
         _bkc start redis
-        _bkc start redis_sentinel
         _bkc install mongodb
         _bkc install zk
         _bkc start zk
@@ -145,7 +132,6 @@ case $service in
         _bkc initdata cmdb
         _bkc start nginx
         source ${SELF_DIR}/load_env.sh 
-        ./bkcli status redis_sentinel
         for svs in zk nginx redis mongodb gse cmdb; do
             ./bkcli status $svs
         done
@@ -156,7 +142,6 @@ case $service in
         ;;
     job)
         _bkc install redis
-        _bkc install redis_sentinel
         _bkc install nginx
         _bkc install mysql
         _bkc install mongodb
@@ -169,12 +154,7 @@ case $service in
         _bkc install job backend
         _bkc install job frontend
         
-        source ${SELF_DIR}/load_env.sh
-        if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
-            _bkc install nfs
-        fi
         _bkc start redis
-        _bkc start redis_sentinel
         wait_ns_alive zk.service.consul
         _bkc start zk
         _bkc start nginx
@@ -185,7 +165,6 @@ case $service in
         _bkc start gse
         _bkc start job
 
-        ./bkcli status redis_sentinel
         for svs in mysql redis zk rabbitmq license cmdb gse job; do
             ./bkcli status $svs
         done
@@ -200,11 +179,9 @@ case $service in
         _bkc start es7
         _bkc initdata es7
         _bkc install kafka
-        _bkc install redis_sentinel
         _bkc install influxdb
         _bkc start kafka
         _bkc start redis
-        _bkc start redis_sentinel
         _bkc start influxdb
         for module in paas job cmdb; do
             if ! grep -q "start $module" $step_file; then
@@ -219,8 +196,6 @@ case $service in
         _bkc sync bkmonitorv3
         _bkc install bkmonitorv3
         _bkc start bkmonitorv3
-        # 特殊步骤, 当有两台grafana时，grafana初次启动，有一台会migrate失败导致启动失败
-        _bkc start bkmonitorv3 grafana
         ./bkcli status bkmonitorv3
         echo 
         echo "如果以上步骤执行没有报错, 说明你已经完成 $(green_echo 蓝鲸监控v3)的部署"
@@ -228,6 +203,7 @@ case $service in
         ;;
     bklog)
         _bkc sync bklog
+        _bkc install saas-o bk_log_search
         _bkc install bklog
         _bkc start bklog
         ./bkcli status bklog
@@ -238,10 +214,6 @@ case $service in
         ;;
     bknodeman)
         _bkc install saas-o bk_nodeman
-        source ${SELF_DIR}/load_env.sh
-        if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
-            _bkc install nfs
-        fi
         _bkc sync nodeman
         _bkc install nodeman
         echo "等待bknodeman启动成功"
@@ -254,9 +226,9 @@ case $service in
         echo 
         ;;
     fta)
-        _bkc install redis_sentinel
+        _bkc install redis
         _bkc install beanstalk
-        _bkc start redis_sentinel
+        _bkc start redis
         _bkc start beanstalk
 
         for module in paas job cmdb; do
@@ -270,7 +242,7 @@ case $service in
         _bkc start fta
         _bkc install saas-o bk_fta_solutions
 
-        for svs in redis_sentinel beanstalk fta; do
+        for svs in redis beanstalk fta; do
             ./bkcli status $svs
         done
 
@@ -315,11 +287,13 @@ case $service in
         echo "在开发者中心点击任意 APP, 在左侧导航的日志服务和告警服务中可以使用该功能"
         echo ""
         ;;
-    lesscode) 
+    lesscode)
+        _bkc install node
         _bkc sync lesscode
         _bkc install lesscode
         _bkc initdata lesscode
         _bkc start lesscode
+        _bkc status lesscode
         ;;
     saas-o|saas-t)
         ./bkcli install $@
@@ -335,7 +309,7 @@ case $service in
         _bkc install iam_search_engine
         _bkc status iam_search_engine
         echo ""
-        echo "如果以上步骤没有报错, 说明你已经完成 $service 的部署"
+        echo "如果以上步骤没有报错, 已经完成 $service 的部署"
         echo ""
         ;;
     bkapigw|apigw)
@@ -348,7 +322,7 @@ case $service in
         _bkc start apisix
         ;;
     ci) 
-       bash ./bk_install_ci
+        bash ./bk_install_ci
        ;;
     *) usage; exit 0 ;;
 esac

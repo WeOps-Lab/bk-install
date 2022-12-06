@@ -37,7 +37,7 @@ install_beanstalk () {
     emphasize  "install beanstalk on host: ${BK_BEANSTALK_IP_COMMA}"
     ${SELF_DIR}/pcmd.sh -m beanstalk "yum install  -y beanstalkd && systemctl enable --now beanstalkd && systemctl start beanstalkd"
     # 注册consul
-    emphasize "register ${_project_port["$module,default"]}  consul server  on host: ${BK_BEANSTALK_IP_COMMA}"
+    emphasize "register ${_project_port["$module,default"]}  consul server  on host: ${BK_BEANSTALK_IP_COMMA} "
     reg_consul_svc "${_project_consul["$module,default"]}" "${_project_port["$module,default"]}" "${BK_BEANSTALK_IP_COMMA}"
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
@@ -102,7 +102,6 @@ install_bkenv () {
                     license.env 
                     bkiam.env  
                     bkssm.env 
-                    bkapigw.env
                     bkauth.env
                     usermgr.env 
                     paasagent.env 
@@ -115,7 +114,9 @@ install_bkenv () {
                     bklog.env 
                     lesscode.env
                     fta.env
-                    bkiam_search_engine.env)
+                    bkiam_search_engine.env
+                    bkapigw.env)
+
 
     # 生成bkrc
     set +e
@@ -168,77 +169,40 @@ install_kafka () {
 }
 
 install_mysql_common () {
-    _install_mysql "$@"
+    _install_mysql $@
     _initdata_mysql
 }
 
 _install_mysql () {
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py  -s -P ${SELF_DIR}/bin/default/port.yaml)
-    local project
-    if  [[ -z ${project} ]]; then
-        # 不传参 默认安装所有mysql模块 包括mysql , 
-        # 安装mysql(paas),mysql(iam)
-        for line in $(awk '/BK_MYSQL_.*_IP_COMMA/{print $0}' "${SELF_DIR}"/bin/02-dynamic/hosts.env); do
-            tmp=$(awk -F '=' '{print $1}' <<<"$line")
-            target_ip=$(awk -F '=' '{print $2}' <<<"$line" | sed "s/'//g")
-            module=$(echo "${tmp}" | sed -r 's/.*BK_MYSQL_(.*)_IP_COMMA.*/\1/' |tr 'A-Z' 'a-z')
-            mysql_user_passwd=BK_${module^^}_MYSQL_PASSWORD
-            port=${_project_port["mysql,${module}"]}
-            "${CTRL_DIR}"/pcmd.sh -H "${target_ip}" "${CTRL_DIR}/bin/install_mysql.sh -n ${module} -P $port -p '${BK_MYSQL_ADMIN_PASSWORD}' -d ${INSTALL_PATH}/public/mysql -l ${INSTALL_PATH}/logs/mysql -b \$LAN_IP -i"
-            # mysql机器配置login-path
-            "${CTRL_DIR}"/pcmd.sh -m "${module}" "'${CTRL_DIR}'/bin/setup_mysql_loginpath.sh -n '${module}-root' -h /var/run/mysql/'${module}'.mysql.socket -u root -p '$BK_MYSQL_ADMIN_PASSWORD'"
-            # 中控机配置login-path
-            "${SELF_DIR}"/bin/setup_mysql_loginpath.sh -n "${_project_consul["mysql,${module}"]}" -h "$LAN_IP" -u root -p "$BK_MYSQL_ADMIN_PASSWORD"
-            reg_consul_svc "${_project_consul["mysql,${module}"]}" "${_project_port["mysql,${module}"]}" "${target_ip}"
-        done
+    projects=${_projects["mysql"]}
         # 安装 mysql
-        for mysql_ip in "${BK_MYSQL_IP[@]}"; do
-            if ! grep "${mysql_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep "BK_MYSQL_.*_IP_COMMA" >/dev/null; then
-                emphasize "install mysql on host: ${mysql_ip}"
-                "${CTRL_DIR}"/pcmd.sh -H "${mysql_ip}" "'${CTRL_DIR}'/bin/install_mysql.sh -n 'default' -P ${_project_port["mysql,default"]} -p '$BK_MYSQL_ADMIN_PASSWORD' -d '${INSTALL_PATH}'/public/mysql -l '${INSTALL_PATH}'/logs/mysql -b \$LAN_IP -i"
-                # # mysql机器配置login-path
-                emphasize "set mysql login path 'default-root' on host: ${mysql_ip}"
-                "${CTRL_DIR}"/pcmd.sh -H "${mysql_ip}" "'${CTRL_DIR}'/bin/setup_mysql_loginpath.sh -n 'default-root' -h /var/run/mysql/'default'.mysql.socket -u root -p '$BK_MYSQL_ADMIN_PASSWORD'"
-                for project in ${_projects["mysql"]}; do
-                   target_ip=BK_MYSQL_${project^^}_IP_COMMA
-                   if [[ -z ${!target_ip} ]]; then 
-                       # 中控机配置login-path
-                       emphasize "set mysql login path ${_project_consul["mysql,${project}"]} on host: 中控机"
-                       "${SELF_DIR}"/bin/setup_mysql_loginpath.sh -n "${_project_consul["mysql,${project}"]}" -h "${mysql_ip}" -u root -p "$BK_MYSQL_ADMIN_PASSWORD"
-                       emphasize "register ${_project_consul["mysql,${project}"]} on host ${mysql_ip}"
-                       reg_consul_svc "${_project_consul["mysql,${project}"]}" "${_project_port["mysql,${project}"]}" "${mysql_ip}"
-                   fi
-                done
-                # 中控机配置 default login-path
-                emphasize "set mysql ${_project_consul["mysql,default"]} login path on host: ${mysql_ip}"
-                "${SELF_DIR}"/bin/setup_mysql_loginpath.sh -n "${_project_consul["mysql,default"]}" -h "${mysql_ip}" -u root -p "$BK_MYSQL_ADMIN_PASSWORD"
-                emphasize "register ${_project_consul["mysql,default"]} on host ${mysql_ip}"
-                reg_consul_svc "${_project_consul["mysql,default"]}" "${_project_port["mysql,default"]}" "${mysql_ip}"
-                emphasize "sign host as module"
-                pcmdrc mysql "_sign_host_as_module mysql"
-            fi
+    local mysql_ip=$BK_MYSQL_IP0
+    if ! grep "${mysql_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep "BK_MYSQL_.*_IP_COMMA" >/dev/null; then
+        emphasize "install mysql on host: ${mysql_ip}"
+        "${CTRL_DIR}"/pcmd.sh -H "${mysql_ip}" "${CTRL_DIR}/bin/install_mysql.sh -n 'default' -P ${_project_port["mysql,default"]} -p '$BK_MYSQL_ADMIN_PASSWORD' -d '${INSTALL_PATH}'/public/mysql -l '${INSTALL_PATH}'/logs/mysql -b \$LAN_IP -i"
+        # # mysql机器配置login-path
+        emphasize "set mysql login path 'default-root' on host: ${mysql_ip}"
+        # TODO: 使用pcmd时会出现意想不到的bug，可能和tty allocation有关，待定位，临时用原生ssh代替
+        ssh "${mysql_ip}" "$CTRL_DIR/bin/setup_mysql_loginpath.sh -n 'default-root' -h '/var/run/mysql/default.mysql.socket' -u 'root' -p '$BK_MYSQL_ADMIN_PASSWORD'"
+        for project in ${projects[@]}; do
+           target_ip=BK_MYSQL_${project^^}_IP_COMMA
+           if [[ -z ${!target_ip} ]]; then 
+               # 中控机配置login-path
+               emphasize "set mysql login path ${_project_consul["mysql,${project}"]} on host: 中控机"
+               "${SELF_DIR}"/bin/setup_mysql_loginpath.sh -n "${_project_consul["mysql,${project}"]}" -h "${mysql_ip}" -u "root" -p "$BK_MYSQL_ADMIN_PASSWORD"
+           fi
         done
-    else
-        # 传参module时， 安装对应的 mysql(paas)
-        target_ip=BK_MYSQL_${project^^}_IP_COMMA
-        mysql_user_passwd=BK_${project^^}_MYSQL_PASSWORD
-        if [[ -z ${!target_ip} ]]; then
-            fail "mysql(${project})不存在"
-        fi
-        consul_name=${_project_consul["mysql,${project}"]} 
-        port=${_project_port["mysql,${project}"]}
-        "${CTRL_DIR}"/pcmd.sh -H "${!target_ip}" "'${CTRL_DIR}'/bin/install_mysql.sh -n '${project}' -P '${_project_port["mysql,${project}"]}' -p '$BK_MYSQL_ADMIN_PASSWORD' -d '${INSTALL_PATH}'/public/mysql -l '${INSTALL_PATH}'/logs/mysql -b \$LAN_IP -i"
-        # mysql机器配置login-path
-        "${CTRL_DIR}"/pcmd.sh -H "${!target_ip}" "'${CTRL_DIR}'/bin/setup_mysql_loginpath.sh -n '${project}-root' -h /var/run/mysql/'${project}'.mysql.socket -u root -p  '$BK_MYSQL_ADMIN_PASSWORD'"
-        # 中控机配置login-path
-        "${SELF_DIR}"/bin/setup_mysql_loginpath.sh -n "${_project_consul["mysql,${project}"]}" -h "$LAN_IP" -u root -p "$BK_MYSQL_ADMIN_PASSWORD"
-        reg_consul_svc "$consul_name" "$port" "${!target_ip}"
-    fi
+        emphasize "register mysql consul on host: ${mysql_ip}"
+        reg_consul_svc "${_project_consul["mysql,default"]}" "${_project_port["mysql,default"]}" "${mysql_ip}"
 
+        # 中控机配置 default login-path
+        emphasize "set mysql ${_project_consul["mysql,default"]} login path on host: 中控机"
+        "${SELF_DIR}"/bin/setup_mysql_loginpath.sh -n "${_project_consul["mysql,default"]}" -h "${mysql_ip}" -u "root" -p "$BK_MYSQL_ADMIN_PASSWORD"
+    fi
     emphasize "sign host as module"
     pcmdrc mysql "_sign_host_as_module mysql"
 }
-
 
 install_redis_common () {
     _install_redis "$@"
@@ -248,49 +212,14 @@ _install_redis () {
     local project=$1
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
     if [ -z  "${project}" ]; then
-        # 全部安装 包括redis(paas) redis
         for redis_ip in "${BK_REDIS_IP[@]}"; do
-            if ! grep "${redis_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep -v "SENTINEL" | grep "BK_REDIS_.*_IP_COMM" >/dev/null; then
-                # redis 逻辑
-                emphasize "install redis on host: $redis_ip"
-                "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "${CTRL_DIR}/bin/install_redis.sh -n '${_project_name["redis,default"]}' -p '${_project_port["redis,default"]}' -a '${BK_REDIS_ADMIN_PASSWORD}' -b \$LAN_IP"
-                for project in ${_projects["redis"]}; do
-                    tmp=BK_REDIS_${project^^}_IP_COMMA
-                    if [[ -z ${!tmp} ]]; then
-                        # 只有不存在redis(project)的时候注册, redis地址HOST指向BK_REDI_IP0
-                        emphasize "register ${_project_consul["redis,${project}"]} on host $BK_REDIS_IP0"
-                        reg_consul_svc "${_project_consul["redis,${project}"]}" "${_project_port["redis,${project}"]}" "$BK_REDIS_IP0"
-                    fi
-                done
-                # 注册redis.service.consul 但不提供HOST给模块使用
+            if ! grep "${redis_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep -v "CLUSTER" | grep "BK_REDIS_.*_IP_COMM" >/dev/null; then
+                "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis.sh -n '${_project_name["redis,default"]}' -p '${_project_port["redis,default"]}' -a '${BK_REDIS_ADMIN_PASSWORD}' -b \$LAN_IP"
                 emphasize "register ${_project_consul["redis,default"]} on host $redis_ip"
                 reg_consul_svc "${_project_consul["redis,default"]}" "${_project_port["redis,default"]}" "${redis_ip}"
-                emphasize "sign host as module"
-                pcmdrc redis "_sign_host_as_module redis"
             fi
         done
-        for line in $(awk '/BK_REDIS_.*_IP_COMMA/{print $0}' "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep -v SENTINEL); do
-            # redis(project)逻辑
-            tmp=$(awk -F '=' '{print $1}' <<<"$line")
-            target_ip=$(awk -F '=' '{print $2}' <<<"$line" | sed "s/'//g") 
-            module=$(echo ${tmp} | sed -r 's/.*BK_REDIS_(.*)_IP_COMMA.*/\1/' |tr 'A-Z' 'a-z')
-            redis_single_passwd=BK_${module^^}_REDIS_PASSWORD
-            emphasize "install redis on host ${target_ip} with name: ${_project_name["redis,${module}"]}"
-            "${CTRL_DIR}"/pcmd.sh -H "${target_ip}" "${CTRL_DIR}/bin/install_redis.sh -n '${_project_name["redis,${module}"]}' -p '${_project_port["redis,${module}"]}' -a '${!redis_single_passwd}' -b \$LAN_IP"
-            emphasize "register ${_project_consul["redis,${module}"]} on host $target_ip"
-            reg_consul_svc "${_project_consul["redis,${module}"]}" "${_project_port["redis,${module}"]}" "${target_ip}"
-        done
-    else
-        # 只安装单模块-> redis(paas)
-        line=$(awk "/BK_REDIS_${project^^}_IP_COMMA/{print \$0}" "${SELF_DIR}"/bin/02-dynamic/hosts.env| grep -v SENTINEL)
-        tmp=$(awk -F '=' '{print $1}' <<<"$line")
-        target_ip=$(awk -F '=' '{print $2}' <<<"$line" | sed "s/'//g")
-        module=$(echo "${tmp}" | sed -r 's/.*BK_REDIS_(.*)_IP_COMMA.*/\1/' |tr 'A-Z' 'a-z')
-        redis_single_passwd=BK_${module^^}_REDIS_PASSWORD
-        "${CTRL_DIR}"/pcmd.sh -H "${target_ip}" "${CTRL_DIR}/bin/install_redis.sh -n '${module}' -p '${_project_port["redis,${module}"]}' -a '${!redis_single_passwd}' -b \$LAN_IP"
-        reg_consul_svc "${_project_consul["redis,${module}"]}" "${_project_port["redis,${module}"]}" "${target_ip}"
     fi
-
     emphasize "sign host as module"
     pcmdrc redis "_sign_host_as_module redis"
 }
@@ -577,7 +506,7 @@ install_auth () {
     migrate_sql $module
     for project in ${projects[@]}; do
         emphasize "install ${target_name}-${project} on host: ${BK_SSM_IP_COMMA}"
-        "${SELF_DIR}"/pcmd.sh -H "${_project_ip["${target_name},${project}"]}" \
+        "${SELF_DIR}"/pcmd.sh -m $module \
                  "${CTRL_DIR}/bin/install_bkauth.sh -e '${CTRL_DIR}/bin/04-final/bkauth.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
         emphasize "register  ${consul} consul server  on host: ${BK_AUTH_IP_COMMA}"
         reg_consul_svc "${_project_consul[${target_name},${project}]}"  "${_project_port[${target_name},${project}]}"  "${_project_ip[${target_name},${project}]}"
@@ -676,12 +605,6 @@ _install_paas_project () {
     emphasize "Registration authority model for ${module}"
     bkiam_migrate $module
 
-    # 挂载nfs
-    if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
-        emphasize "mount nfs to host: $BK_NFS_IP0"
-        pcmdrc ${module} "_mount_shared_nfs open_paas"
-    fi
-
     # 版本信息
     _update_common_info
 
@@ -723,7 +646,6 @@ install_apigw_fe () {
 
 }
 
-
 install_apigw () {
     local module=apigw
     local project=${1:-all}
@@ -742,6 +664,9 @@ install_apigw () {
     emphasize "sync and install python on host: ${BK_APIGW_IP_COMMA}"
     install_python $module
 
+    # 安装 etcd
+    install_etcd
+
     for project in dashboard bk-esb operator apigateway; do
         emphasize "register consul $project on host: ${ip}"
         reg_consul_svc ${_project_consul["${module},${project}"]} ${_project_port["${module},${project}"]} "${BK_APIGW_IP_COMMA}"
@@ -758,7 +683,8 @@ install_apigw () {
         done
     done
 
-    emphasize "add or update app_code ${BK_APIGW_APP_CODE}"
+
+    emphasize "add or update appocode ${BK_APIGW_APP_CODE}"
     add_or_update_appcode "$BK_APIGW_APP_CODE" "$BK_APIGW_APP_SECRET"
 
     emphasize "sign host as module"
@@ -874,12 +800,6 @@ install_appo () {
     emphasize "install consul-template on host: ${BK_APPO_IP_COMMA}"
     install_consul_template "paasagent" "${BK_APPO_IP_COMMA}"
 
-    # nfs
-    if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
-        emphasize "mount nfs to host: $BK_NFS_IP0"
-        pcmdrc ${module} "_mount_shared_nfs ${module}"
-    fi
-
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
     pcmdrc ${module} "_sign_host_as_module consul-template"
@@ -978,12 +898,6 @@ _install_job_backend () {
     emphasize "Registration authority model for ${module}"
     bkiam_migrate ${module}
 
-    # nfs
-    if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
-        emphasize "mount nfs to host: ${BK_NFS_IP0}"
-        pcmdrc job "_mount_shared_nfs job"
-    fi
-
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
 }
@@ -1042,7 +956,8 @@ install_saas () {
             if [ "$app_version" == "$app_v" ]; then
                 pkg_name=$(_find_latest_one $app_code)
             else
-                pkg_name=${app_code}_V${app_version}.tar.gz
+                # pkg_name=${app_code}_V${app_version}.tar.gz
+                pkg_name=$( _find_saas $app_code $app_version )
             fi
 
             _install_saas $env $app_code $pkg_name
@@ -1127,6 +1042,7 @@ _install_bkmonitor () {
 install_paas_plugins () {
     local module=paas_plugins
     local python_path=/opt/py27/bin/python
+
     emphasize "sync java11 on host: ${BK_PAAS_IP_COMMA}"
     "${SELF_DIR}"/sync.sh "paas" "${BK_PKG_SRC_PATH}/java11.tgz" "${BK_PKG_SRC_PATH}/"
 
@@ -1186,12 +1102,6 @@ install_nodeman () {
 
     # 启动
     "${SELF_DIR}"/pcmd.sh -m ${module} "systemctl start bk-nodeman.service"
-
-    # nfs
-    if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
-        emphasize "mount nfs to host: $BK_NFS_IP0"
-        pcmdrc ${module} "_mount_shared_nfs bknodeman"
-    fi
 
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
@@ -1335,7 +1245,7 @@ install_lesscode () {
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
     pcmdrc nginx "_sign_host_as_module consul-template"
-
+    
     emphasize "set bk_lesscode as desktop display by default"
     set_console_desktop "bk_lesscode"
 }
@@ -1355,12 +1265,11 @@ install_bkapi () {
 
 }
 
-
 module=${1:-null}
 shift $(($# >= 1 ? 1 : 0))
 
 case $module in
-    paas|license|cmdb|job|gse|yum|consul|pypi|bkenv|rabbitmq|zk|mongodb|influxdb|license|cert|nginx|usermgr|appo|bklog|es7|python|appt|kafka|beanstalk|fta|nfs|dbcheck|controller|lesscode|node|bkapi|apigw|etcd|apisix)
+    paas|license|cmdb|job|gse|yum|consul|pypi|bkenv|rabbitmq|zk|mongodb|influxdb|license|cert|nginx|usermgr|appo|bklog|es7|python|appt|kafka|beanstalk|fta|dbcheck|controller|lesscode|node|bkapi|apigw|etcd|apisix)
         install_"${module}" $@
         ;;
     paas_plugins)
