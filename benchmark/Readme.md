@@ -1,0 +1,3 @@
+# Benchmark
+
+Benchmark目录存放蓝鲸平台及WeOps产品的基准测试脚本
