@@ -1,3 +1,7 @@
 .bk_install.step
 .agreed
 bin/02-dynamic/
+install.config
+.controller_ip
+.path
+.rcmdrc
