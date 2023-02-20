@@ -29,7 +29,7 @@ PREFIX=/data/bkee
 MODULE_SRC_DIR=/data/src
 
 # PYTHON目录(默认用加密的解释器)
-PYTHON_PATH=/opt/py36_e/bin/python3.6
+PYTHON_PATH=/opt/py36/bin/python3.6
 
 MODULE=open_paas
 
@@ -49,7 +49,6 @@ usage () {
 
             [ -s, --srcdir      [必填] "从该目录拷贝open_paas/module目录到--prefix指定的目录" ]
             [ -p, --prefix          [可选] "安装的目标路径，默认为/data/bkee" ]
-            [ --cert-path       [可选] "企业版证书存放目录，默认为$PREFIX/cert" ]
             [ -l, --log-dir         [可选] "日志目录,默认为$PREFIX/logs/open_paas" ]
 
             [ -v, --version     [可选] 查看脚本版本号 ]
@@ -116,10 +115,6 @@ while (( $# > 0 )); do
             shift
             LOG_DIR=$1
             ;;
-        --cert-path)
-            shift
-            CERT_PATH=$1
-            ;;
         --help | -h | '-?' )
             usage_and_exit 0
             ;;
@@ -138,7 +133,6 @@ while (( $# > 0 )); do
 done 
 
 LOG_DIR=${LOG_DIR:-$PREFIX/logs/open_paas}
-CERT_PATH=${CERT_PATH:-$PREFIX/cert}
 
 # 参数合法性有效性校验，这些可以使用通用函数校验。
 if ! [[ -d "$MODULE_SRC_DIR"/open_paas ]]; then
@@ -176,8 +170,6 @@ EOF
 
 # 拷贝pip pkgs
 rsync -a --delete "${MODULE_SRC_DIR}"/open_paas/support-files "$PREFIX/open_paas/"
-# 拷贝证书
-rsync -a --delete "${MODULE_SRC_DIR}"/open_paas/cert "$PREFIX/open_paas/"
 
 # 拷贝模块目录到$PREFIX，并创建虚拟环境，media目录是一个特例，它会有用户上传的saas包
 rsync -a --delete --exclude=media "${MODULE_SRC_DIR}"/open_paas/"${PAAS_MODULE}"/ "$PREFIX/open_paas/${PAAS_MODULE}/"
@@ -208,7 +200,7 @@ case $PAAS_MODULE in
         if [[ -f $PREFIX/$MODULE/$PAAS_MODULE/on_migrate ]]; then
             (
                 set +u +e
-                export BK_FILE_PATH="$PREFIX"/open_paas/cert/saas_priv.txt 
+
                 export WORKON_HOME=$PREFIX/.envs
                 VIRTUALENVWRAPPER_PYTHON="$PYTHON_PATH"
                 source "${PYTHON_PATH%/*}/virtualenvwrapper.sh"
@@ -235,7 +227,6 @@ User=blueking
 Group=blueking
 WorkingDirectory=$PREFIX/open_paas/${PAAS_MODULE}
 Environment=PATH=$PREFIX/.envs/open_paas-${PAAS_MODULE}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
-Environment=BK_FILE_PATH=$PREFIX/open_paas/cert/saas_priv.txt
 ExecStart=/bin/bash -c '$PREFIX/.envs/open_paas-${PAAS_MODULE}/bin/uwsgi --ini $PREFIX/etc/uwsgi-open_paas-${PAAS_MODULE}.ini'
 Restart=on-failure
 RestartSec=3s

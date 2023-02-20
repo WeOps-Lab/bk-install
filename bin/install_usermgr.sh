@@ -24,7 +24,7 @@ PREFIX=/data/bkee
 MODULE_SRC_DIR=/data/src
 
 # PYTHON目录
-PYTHON_PATH=/opt/py36_e/bin/python3.6
+PYTHON_PATH=/opt/py36/bin/python3.6
 
 # 默认安装所有子模块
 MODULE=usermgr
@@ -163,12 +163,11 @@ case $USERMGR_MODULE in
         
         (
             set +u
-            export BK_FILE_PATH="$PREFIX"/usermgr/cert/saas_priv.txt 
             export WORKON_HOME=$PREFIX/.envs
             VIRTUALENVWRAPPER_PYTHON="$PYTHON_PATH"
             source "${PYTHON_PATH%/*}/virtualenvwrapper.sh"
             workon "${MODULE}-${USERMGR_MODULE}" && \
-            python manage.py migrate
+            DJANGO_SETTINGS_MODULE="bkuser_core.config.overlays.prod" python manage.py migrate
         )
 
         chown blueking.blueking -R "$PREFIX/$MODULE" "$LOG_DIR"
@@ -184,7 +183,6 @@ PartOf=blueking.target
 User=blueking
 Group=blueking
 Type=forking
-Environment=BK_FILE_PATH=$PREFIX/usermgr/cert/saas_priv.txt 
 ExecStart=/opt/py36/bin/supervisord -c $PREFIX/etc/supervisor-usermgr-api.conf
 ExecStop=/opt/py36/bin/supervisorctl -c $PREFIX/etc/supervisor-usermgr-api.conf shutdown
 ExecReload=/opt/py36/bin/supervisorctl -c $PREFIX/etc/supervisor-usermgr-api.conf reload

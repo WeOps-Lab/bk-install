@@ -76,9 +76,9 @@ case $service in
         _bkc install bkiam
         _bkc start bkiam
 
-        _bkc sync bkssm
-        _bkc install bkssm
-        _bkc start bkssm
+        # _bkc sync bkssm
+        # _bkc install bkssm
+        # _bkc start bkssm
 
         _bkc sync paas
         _bkc install paas
@@ -97,9 +97,9 @@ case $service in
         source ${SELF_DIR}/load_env.sh
         source ${SELF_DIR}/tools.sh
 
-        # 初始化saas所需环境变量到paas数据库
+        # # 初始化saas所需环境变量到paas数据库
         add_saas_environment
-        # 增加免登录态白名单到paas数据库
+        # # 增加免登录态白名单到paas数据库
         add_saas_skip_auth
 
         echo ""
