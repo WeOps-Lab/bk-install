@@ -23,7 +23,7 @@ PREFIX=/data/bkee
 MODULE_SRC_DIR=/data/src
 
 # PYTHON目录
-PYTHON_PATH=/opt/py36_e/bin/python3.6
+PYTHON_PATH=/opt/py36/bin/python3.6
 
 # 默认安装所有子模块
 MODULE=bknodeman
