@@ -61,14 +61,14 @@ case $service in
     paas)
         _bkc install consul
         _bkc start consul
-        _bkc sync license
-        _bkc install license
+        # _bkc sync license
+        # _bkc install license
         _bkc install mysql
         _bkc install redis
         _bkc start mysql
         _bkc install nginx
 
-        _bkc start license
+        # _bkc start license
         _bkc start redis
         _bkc start nginx
 
