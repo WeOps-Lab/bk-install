@@ -155,7 +155,7 @@ repl-disable-tcp-nodelay no
 slave-priority 100
 requirepass ${PASSWORD}
 masterauth ${PASSWORD}
-appendonly no
+appendonly yes
 appendfsync everysec
 no-appendfsync-on-rewrite no
 auto-aof-rewrite-percentage 100
