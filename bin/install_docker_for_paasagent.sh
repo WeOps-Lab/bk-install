@@ -25,6 +25,13 @@ cat <<EOF > /etc/docker/daemon.json
         "max-size": "500m",
         "max-file":"5"
     },
+    "default-ulimits": {
+        "core": {
+            "Name": "core",
+            "Hard": 0,
+            "Soft": 0
+        }
+    },
     "storage-driver": "overlay2",
     "storage-opts": [
         "overlay2.override_kernel_check=true"
