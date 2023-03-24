@@ -1,0 +1,9 @@
+.bk_install.step
+.agreed
+bin/02-dynamic/
+bin/01-generate/
+bin/04-final
+install.config
+.controller_ip
+.path
+.rcmdrc

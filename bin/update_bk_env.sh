@@ -91,27 +91,27 @@ fi
 #fi
 
 # 安装基础命令和基础包
-COMMAND_RPM_LIST=(rsync jq expect uuid lsof)
-COMMON_RPM_LIST=(openssl-devel readline-devel libcurl-devel libxml2-devel glibc-devel zlib-devel iproute sysvinit-tools procps-ng bind-utils bash-completion)
-yum -y install "${COMMAND_RPM_LIST[@]}" "${COMMON_RPM_LIST[@]}"
+# COMMAND_RPM_LIST=(rsync jq expect uuid lsof)
+# COMMON_RPM_LIST=(openssl-devel readline-devel libcurl-devel libxml2-devel glibc-devel zlib-devel iproute sysvinit-tools procps-ng bind-utils bash-completion)
+# yum -y install "${COMMAND_RPM_LIST[@]}" "${COMMON_RPM_LIST[@]}"
 
-rt=0
-for cmd in "${COMMAND_RPM_LIST[@]}"; do 
-    yum install -y "${cmd}"
-    if ! command -v "$cmd" >/dev/null; then
-        echo "$cmd is not found, yum install $cmd failed." >&2 
-        ((rt++))
-    fi
-done
+# rt=0
+# for cmd in "${COMMAND_RPM_LIST[@]}"; do 
+#     yum install -y "${cmd}"
+#     if ! command -v "$cmd" >/dev/null; then
+#         echo "$cmd is not found, yum install $cmd failed." >&2 
+#         ((rt++))
+#     fi
+# done
 
-for rpm in "${COMMON_RPM_LIST[@]}"; do
-    if ! rpm -q "${rpm}" > /dev/null 2>&1; then
-        echo "$rpm is not installed, yum install $cmd failed." >&2 
-        ((rt++))
-    fi
-done
+# for rpm in "${COMMON_RPM_LIST[@]}"; do
+#     if ! rpm -q "${rpm}" > /dev/null 2>&1; then
+#         echo "$rpm is not installed, yum install $cmd failed." >&2 
+#         ((rt++))
+#     fi
+# done
 
-exit "$rt"
+# exit "$rt"
 # copy app.token file
 # if [[ -s $CTRL_DIR/.app.token ]]; then
 #     cp -a "$CTRL_DIR"/.app.token /etc/blueking/app_token.txt

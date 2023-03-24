@@ -1338,7 +1338,7 @@ install_lesscode () {
 
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
-    pcmdrc nginx "_sign_host_as_module consul-template
+    pcmdrc nginx "_sign_host_as_module consul-template"
 
     emphasize "set bk_lesscode as desktop display by default"
     set_console_desktop "bk_lesscode"

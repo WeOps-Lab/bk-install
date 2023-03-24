@@ -48,15 +48,15 @@ shell_type_check
 
 case $service in
     common)
-        _bkc install controller
+        # _bkc install controller
         _bkc install bkenv
-        _bkc install python
-        _bkc sync common
+        # _bkc install python
+        # _bkc sync common
         _bkc update bkenv
         _bkc sync cert
         _bkc install cert
-        _bkc install yum
-        ./bkcli install controller 1 # 安装EPEL源默认不提供的rpm包
+        # _bkc install yum
+        # ./bkcli install controller 1 # 安装EPEL源默认不提供的rpm包
         echo ""
         echo "如果以上步骤执行没有报错, 说明你已经完成蓝鲸部署基础依赖的安装, 请按照文档继续执行剩余步骤"
         echo ""
