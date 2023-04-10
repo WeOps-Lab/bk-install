@@ -18,6 +18,7 @@ declare -r ZERO_DEP_ERLANG_VER="21.3.8.14"
 declare -r RABBITMQ_VER="3.8.3"
 declare -r ELASTICSEARCH_VER='7.6.1'
 declare -r MYSQL_VER="5.7.29"
+declare -r DOCKER_VER="20.10.23"
 
 cat <<EOF > "${TMP_FILE}"
 # rpm
@@ -40,10 +41,13 @@ https://github.com/rabbitmq/erlang-rpm/releases/download/v${ZERO_DEP_ERLANG_VER}
 https://github.com/rabbitmq/rabbitmq-server/releases/download/v${RABBITMQ_VER}/rabbitmq-server-${RABBITMQ_VER}-1.el7.noarch.rpm
 https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-${ELASTICSEARCH_VER}-x86_64.rpm
 
-https://mirrors.tencent.com/docker-ce/linux/centos/7/x86_64/stable/Packages/docker-ce-18.09.9-3.el7.x86_64.rpm
-https://mirrors.tencent.com/docker-ce/linux/centos/7/x86_64/stable/Packages/docker-ce-cli-18.09.9-3.el7.x86_64.rpm
-https://mirrors.tencent.com/docker-ce/linux/centos/7/x86_64/stable/Packages/containerd.io-1.2.13-3.2.el7.x86_64.rpm
-https://mirrors.tencent.com/docker-ce/linux/centos/7/x86_64/stable/Packages/docker-ce-selinux-17.03.3.ce-1.el7.noarch.rpm
+https://mirrors.tencent.com/docker-ce/linux/centos/7/x86_64/stable/Packages/docker-ce-${DOCKER_VER}-3.el7.x86_64.rpm
+https://mirrors.tencent.com/docker-ce/linux/centos/7/x86_64/stable/Packages/docker-ce-cli-${DOCKER_VER}-3.el7.x86_64.rpm
+https://mirrors.tencent.com/docker-ce/linux/centos/7/x86_64/stable/Packages/docker-ce-rootless-extras-${DOCKER_VER}-3.el7.x86_64.rpm
+
+https://mirrors.tencent.com/docker-ce/linux/centos/7/x86_64/stable/Packages/docker-scan-plugin-0.23.0-3.el7.x86_64.rpm
+https://mirrors.tencent.com/docker-ce/linux/centos/7/x86_64/stable/Packages/containerd.io-1.4.12-3.1.el7.x86_64.rpm
+https://mirrors.tencent.com/docker-ce/linux/centos/7/x86_64/stable/Packages/container-selinux-2.107-3.el7.noarch.rpm
 
 # pkgs
 https://releases.hashicorp.com/consul/${CONSUL_VER}/consul_${CONSUL_VER}_linux_amd64.zip

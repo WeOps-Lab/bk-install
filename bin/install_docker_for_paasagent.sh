@@ -3,11 +3,12 @@
 set -e
 
 SELF_DIR="$(dirname "$(readlink -f "$0")")"
+DOCKER_VERSION="20.10.23"
 
 source ${SELF_DIR}/../load_env.sh
 
-if ! rpm -q install docker-ce-18.09.9;then
-    yum install docker-ce-18.09.9 -y
+if ! rpm -q install "docker-ce-$DOCKER_VERSION";then
+    yum install "docker-ce-$DOCKER_VERSION" -y
 fi
 # TODO: 需要自定义下daemon.json(参考dockerctl的start_docker()函数)
 [[ -d /etc/docker ]] || mkdir -p /etc/docker
