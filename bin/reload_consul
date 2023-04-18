@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+
+# 用途：在consul注册成功后重载consul服务
+
+set -euo pipefail
+
+# 通用脚本框架变量
+PROGRAM=$(basename "$0")
+VERSION=1.0
+EXITCODE=0
+
+# consul 注册接口路径
+readonly AGENT_RELOAD_API="/v1/agent/reload"
+CONSUL_HTTP_URL="http://127.0.0.1:8500"
+
+usage () {
+    cat <<EOF >&2
+用法: 
+    $PROGRAM [ -h --help -?  查看帮助 ]
+            [ -i, --url         [可选] "consul的api地址，默认为：http://127.0.0.1:8500" ]
+            [ -v, --version     [可选] 查看脚本版本号 ]
+EOF
+}
+
+usage_and_exit () {
+    usage
+    exit "$1"
+}
+
+log () {
+    echo "$@"
+}
+
+error () {
+    echo "$@" 1>&2
+    usage_and_exit 1
+}
+
+warning () {
+    echo "$@" 1>&2
+    EXITCODE=$((EXITCODE + 1))
+}
+
+version () {
+    echo "$PROGRAM version $VERSION"
+}
+
+
+# 解析命令行参数，长短混合模式
+# (( $# == 0 )) && usage_and_exit 1
+while (( $# > 0 )); do 
+    case "$1" in
+        -i | --url )
+            shift
+            CONSUL_HTTP_URL="$1"
+            ;;
+        --help | -h | '-?' )
+            usage_and_exit 0
+            ;;
+        --version | -v | -V )
+            version 
+            exit 0
+            ;;
+        -*)
+            error "不可识别的参数: $1"
+            ;;
+        *) 
+            break
+            ;;
+    esac
+    shift $(( $# == 0 ? 0 : 1 ))
+done 
+
+
+if (( EXITCODE > 0 )); then
+    usage_and_exit "$EXITCODE"
+fi
+
+REG_RELOAD_API=${CONSUL_HTTP_URL}${AGENT_RELOAD_API}
+
+
+RET_CODE=$(curl --request PUT -s -o /dev/null -w "%{http_code}" "$REG_RELOAD_API")
+
+# 判断是否重载成功
+if (( RET_CODE > 0 )); then
+    echo "consul重载成功"
+else
+    echo "consul重载失败"
+    exit 2
+fi

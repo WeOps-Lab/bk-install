@@ -80,9 +80,9 @@ reg_consul_svc () {
     if grep '\.' <<< "${name}" >/dev/null ; then
         n=$(awk -F'.' '{print $2}' <<<${name})
         tag=$(awk -F'.' '{print $1}' <<<${name})
-        "${CTRL_DIR}"/pcmd.sh -H ${addr}  "${CTRL_DIR}/bin/reg_consul_svc -n "${n}"  -t ${tag} -p ${port} -a \$LAN_IP -D > /etc/consul.d/service/${n}-${tag}.json && consul reload"
+        "${CTRL_DIR}"/pcmd.sh -H ${addr}  "${CTRL_DIR}/bin/reg_consul_svc -n "${n}"  -t ${tag} -p ${port} -a \$LAN_IP -D > /etc/consul.d/service/${n}-${tag}.json && ${CTRL_DIR}/bin/reload_consul"
     else
-        "${CTRL_DIR}"/pcmd.sh -H ${addr}  "${CTRL_DIR}/bin/reg_consul_svc -n "${name}" -p ${port} -a \$LAN_IP -D > /etc/consul.d/service/${name}.json && consul reload"
+        "${CTRL_DIR}"/pcmd.sh -H ${addr}  "${CTRL_DIR}/bin/reg_consul_svc -n "${name}" -p ${port} -a \$LAN_IP -D > /etc/consul.d/service/${name}.json && ${CTRL_DIR}/bin/reload_consul"
     fi
 }
 
