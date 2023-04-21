@@ -120,15 +120,17 @@ fi
 
 
 # 安装依赖
-if ! rpm -ql mysql-community-server-${MYSQL_VERSION} &>/dev/null; then
-    log "installing mysql-community-server-${MYSQL_VERSION}"
-    yum -q -y install mysql-community-server-${MYSQL_VERSION} || error "安装mysql server失败"
-fi
+# if ! rpm -ql mysql-community-server-${MYSQL_VERSION} &>/dev/null; then
+#     log "installing mysql-community-server-${MYSQL_VERSION}"
+#     yum -q -y install mysql-community-server-${MYSQL_VERSION} || error "安装mysql server失败"
+# fi
 
-install -o mysql -g mysql -d "${LOG_DIR}"
+# 999为mysql镜像用户的内置uid
+install -o 999 -g 999 -d "${LOG_DIR}"
 # 多实例分开datadir
-install -o mysql -g mysql -d "${DATA_DIR}"/"${NAME}"/{tmp,binlog,relaylog,data}
-install -o mysql -g mysql -d /etc/mysql
+install -o 999 -g 999 -d "${DATA_DIR}"/"${NAME}"/{tmp,binlog,relaylog,data}
+install -o 999 -g 999 -d /etc/mysql
+install -o 999 -g 999 -d /var/run/mysql
 
 # 生成server的my.cnf
 cat > /etc/mysql/"${NAME}.my.cnf" <<EOF
@@ -209,84 +211,113 @@ port=${PORT}
 socket=/var/run/mysql/${NAME}.mysql.socket
 EOF
 
+# 使用docker形式启动mysql
+log "删除已存在的mysql容器"
+if docker ps -a | awk '{print $NF}' | grep -wq "bk-mysql-${NAME}"; then
+  log "检测到已存在的bk-mysql-${NAME}"
+  docker rm -f bk-mysql-${NAME}
+fi
+
+log "启动mysql容器"
+docker run --name=bk-mysql-${NAME} -d \
+           --volume /etc/mysql/"${NAME}.my.cnf":/etc/mysql/my.cnf \
+           --volume ${DATA_DIR}/${NAME}:${DATA_DIR}/${NAME} \
+           --volume ${LOG_DIR}:${LOG_DIR} \
+           --volume /var/run/mysql:/var/run/mysql \
+           --env MYSQL_ROOT_PASSWORD=blueking \
+           --network=host \
+           mysql:${MYSQL_VERSION}
+
+# 等待mysql启动
+log "等待mysql启动"
+sleep 30          
+
+# 检查 是否需要初始化密码
+docker exec bk-mysql-${NAME} mysql -u root -S /var/run/mysql/${NAME}.mysql.socket -pblueking -e "SELECT User FROM mysql.user WHERE User='root';" 2>&1 > /dev/null
+
+if [ $? -eq 0 ]; then
+    docker exec bk-mysql-${NAME} mysql -u root -S /var/run/mysql/${NAME}.mysql.socket -pblueking -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('$PASSWORD')"
+    log "设置mysql的root@localhost密码为: ${PASSWORD:0:${#PASSWORD}-4}"
+fi
+
 # 生成mysql@.service, 和mysql.target
-echo '[Unit]' > /etc/systemd/system/mysql.target
-echo 'Description=mysql target allowing to start/stop all mysql@.service instances at once' >> /etc/systemd/system/mysql.target
-cat > /etc/systemd/system/mysql@.service <<EOF
-[Unit]
-Description=MySQL Server
-Documentation=http://dev.mysql.com/doc/refman/en/using-systemd.html
-After=network.target
-After=syslog.target
-PartOf=mysql.target
+# echo '[Unit]' > /etc/systemd/system/mysql.target
+# echo 'Description=mysql target allowing to start/stop all mysql@.service instances at once' >> /etc/systemd/system/mysql.target
+# cat > /etc/systemd/system/mysql@.service <<EOF
+# [Unit]
+# Description=MySQL Server
+# Documentation=http://dev.mysql.com/doc/refman/en/using-systemd.html
+# After=network.target
+# After=syslog.target
+# PartOf=mysql.target
 
-[Install]
-WantedBy=multi-user.target
+# [Install]
+# WantedBy=multi-user.target
 
-[Service]
-User=mysql
-Group=mysql
-Type=forking
-RuntimeDirectory=mysql
-RuntimeDirectoryMode=755
-PIDFile=/var/run/mysql/%i.mysqld.pid
-# Disable service start and stop timeout logic of systemd for mysqld service.
-TimeoutSec=0
+# [Service]
+# User=mysql
+# Group=mysql
+# Type=forking
+# RuntimeDirectory=mysql
+# RuntimeDirectoryMode=755
+# PIDFile=/var/run/mysql/%i.mysqld.pid
+# # Disable service start and stop timeout logic of systemd for mysqld service.
+# TimeoutSec=0
 
-# Start main service
-ExecStart=/sbin/mysqld --defaults-file=/etc/mysql/%i.my.cnf \
-        --daemonize --pid-file=/var/run/mysql/%i.mysqld.pid $MYSQLD_OPTS 
+# # Start main service
+# ExecStart=/sbin/mysqld --defaults-file=/etc/mysql/%i.my.cnf \
+#         --daemonize --pid-file=/var/run/mysql/%i.mysqld.pid $MYSQLD_OPTS 
 
-# Use this to switch malloc implementation
-EnvironmentFile=-/etc/sysconfig/%i.mysql
+# # Use this to switch malloc implementation
+# EnvironmentFile=-/etc/sysconfig/%i.mysql
 
-LimitNOFILE=10000
-Restart=on-failure
-RestartPreventExitStatus=1
-PrivateTmp=false
-EOF
+# LimitNOFILE=10000
+# Restart=on-failure
+# RestartPreventExitStatus=1
+# PrivateTmp=false
+# EOF
 
 # 初次安装需要初始化数据库, 并获取临时root密码
-LOG_ERROR_FILE="${LOG_DIR}/${NAME}.mysqld.log"
-TMP_ROOT_PASSWORD=
-if [[ $IS_INIT -eq 1 ]]; then
-    if ! /sbin/mysqld --defaults-file=/etc/mysql/"${NAME}.my.cnf" --initialize; then
-        error "初始化mysql@${NAME}失败，请参考日志 $LOG_ERROR_FILE 确认报错信息。"
-    else
-        TMP_ROOT_PASSWORD=$(awk '/A temporary password is generated/ { print $NF }' "$LOG_ERROR_FILE" | tail -1)
-    fi
-fi
+# LOG_ERROR_FILE="${LOG_DIR}/${NAME}.mysqld.log"
+# TMP_ROOT_PASSWORD=
+# if [[ $IS_INIT -eq 1 ]]; then
+#     if ! /sbin/mysqld --defaults-file=/etc/mysql/"${NAME}.my.cnf" --initialize; then
+#         error "初始化mysql@${NAME}失败，请参考日志 $LOG_ERROR_FILE 确认报错信息。"
+#     else
+#         TMP_ROOT_PASSWORD=$(awk '/A temporary password is generated/ { print $NF }' "$LOG_ERROR_FILE" | tail -1)
+#     fi
+# fi
 
-# 加载配置，启动mysqld实例
-if systemd-analyze verify "/etc/systemd/system/mysql@${NAME}.service"; then
-    log "重新加载systemd"
-    systemctl daemon-reload
-    log "启动MySQL实例 mysql@${NAME}"
-    systemctl start "mysql@${NAME}.service"
-    log "检查mysql@${NAME} 状态"
-    if ! systemctl status "mysql@${NAME}.service"; then 
-        log "请检查启动日志，使用命令：journalctl -u mysql@${NAME} 查看失败原因"
-        log "手动修复后，使用命令：systemctl start mysql@${NAME} 启动并确认是否启动成功"
-        log "启动成功后，使用命令：systemctl enable mysql@${NAME} 设置开机启动"
-        exit 100
-    else
-        log "设置Mysql实例 mysql@${NAME} 开机启动"
-        systemctl enable mysql@"${NAME}"
-    fi
+# # 加载配置，启动mysqld实例
+# if systemd-analyze verify "/etc/systemd/system/mysql@${NAME}.service"; then
+#     log "重新加载systemd"
+#     systemctl daemon-reload
+#     log "启动MySQL实例 mysql@${NAME}"
+#     systemctl start "mysql@${NAME}.service"
+#     log "检查mysql@${NAME} 状态"
+#     if ! systemctl status "mysql@${NAME}.service"; then 
+#         log "请检查启动日志，使用命令：journalctl -u mysql@${NAME} 查看失败原因"
+#         log "手动修复后，使用命令：systemctl start mysql@${NAME} 启动并确认是否启动成功"
+#         log "启动成功后，使用命令：systemctl enable mysql@${NAME} 设置开机启动"
+#         exit 100
+#     else
+#         log "设置Mysql实例 mysql@${NAME} 开机启动"
+#         systemctl enable mysql@"${NAME}"
+#     fi
 
-    # 设置 mysql root随机密码为用户指定的密码
-    if [[ -n "$PASSWORD" && $IS_INIT -eq 1 ]]; then
-        if MYSQL_PWD="$TMP_ROOT_PASSWORD" /usr/bin/mysql --defaults-file="/etc/mysql/${NAME}.client.conf" \
-            -uroot --connect-expired-password \
-            -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('$PASSWORD')"; then
-            log "设置mysql的root@localhost密码为: ${PASSWORD:0:${#PASSWORD}-4}****"
-        fi
-    fi
-else
-    error "systemd服务定义文件(/etc/systemd/system/mysql@.service)有误"
-fi
+#     # 设置 mysql root随机密码为用户指定的密码
+#     if [[ -n "$PASSWORD" && $IS_INIT -eq 1 ]]; then
+#         if MYSQL_PWD="$TMP_ROOT_PASSWORD" /usr/bin/mysql --defaults-file="/etc/mysql/${NAME}.client.conf" \
+#             -uroot --connect-expired-password \
+#             -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('$PASSWORD')"; then
+#             log "设置mysql的root@localhost密码为: ${PASSWORD:0:${#PASSWORD}-4}****"
+#         fi
+#     fi
+# else
+#     error "systemd服务定义文件(/etc/systemd/system/mysql@.service)有误"
+# fi
 
-# 去掉mysqld.service的开机启动，否则会造成重启机器后，3306端口被mysqld占用的问题
-if systemctl is-enabled mysqld.service &>/dev/null; then
-    systemctl disable mysqld.service &>/dev/null
-fi
+# # 去掉mysqld.service的开机启动，否则会造成重启机器后，3306端口被mysqld占用的问题
+# if systemctl is-enabled mysqld.service &>/dev/null; then
+#     systemctl disable mysqld.service &>/dev/null
+# fi
