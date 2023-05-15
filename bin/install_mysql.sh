@@ -230,7 +230,17 @@ docker run --name=bk-mysql-${NAME} -d \
 
 # 等待mysql启动
 log "等待mysql启动"
-sleep 30          
+local counter=0
+while ! lsof -i:3306 -sTCP:LISTEN >/dev/null && [[ $counter -lt 60 ]]; do
+    sleep 1
+    ((counter++))
+done 
+
+if [[ $counter -lt 60 ]]; then
+    log "MySQL is now listening on port 3306"
+else
+    log "Timed out waiting for MySQL to listen on port 3306"
+fi
 
 # 检查 是否需要初始化密码
 docker exec bk-mysql-${NAME} mysql -u root -S /var/run/mysql/${NAME}.mysql.socket -pblueking -e "SELECT User FROM mysql.user WHERE User='root';" 2>&1 > /dev/null
