@@ -595,6 +595,12 @@ _install_paas_project () {
         done
     done
 
+    # 挂载nfs
+    if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
+        emphasize "mount nfs to host: $BK_NFS_IP0"
+        pcmdrc ${module} "_mount_shared_nfs open_paas"
+    fi
+
     # 注册白名单
     emphasize "add or update appcode: $BK_PAAS_APP_CODE"
     add_or_update_appcode "$BK_PAAS_APP_CODE" "$BK_PAAS_APP_SECRET"
@@ -796,6 +802,12 @@ install_appo () {
     # 安装openresty
     emphasize "install openresty on host: ${BK_APPO_IP_COMMA}"
     "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_openresty.sh -p ${INSTALL_PATH} -d ${CTRL_DIR}/support-files/templates/nginx/"
+
+    # nfs
+    if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
+        emphasize "mount nfs to host: $BK_NFS_IP0"
+        pcmdrc ${module} "_mount_shared_nfs ${module}"
+    fi
     
     emphasize "install consul-template on host: ${BK_APPO_IP_COMMA}"
     install_consul_template "paasagent" "${BK_APPO_IP_COMMA}"
@@ -897,6 +909,12 @@ _install_job_backend () {
     # 权限模型
     emphasize "Registration authority model for ${module}"
     bkiam_migrate ${module}
+
+    # nfs
+    if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
+        emphasize "mount nfs to host: ${BK_NFS_IP0}"
+        pcmdrc job "_mount_shared_nfs job"
+    fi
 
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
@@ -1103,6 +1121,12 @@ install_nodeman () {
     # 启动
     "${SELF_DIR}"/pcmd.sh -m ${module} "systemctl start bk-nodeman.service"
 
+    # nfs
+    if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
+        emphasize "mount nfs to host: ${BK_NFS_IP0}"
+        pcmdrc ${module} "_mount_shared_nfs bknodeman"
+    fi
+
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
     pcmdrc ${module} "_sign_host_as_module consul-template"
@@ -1269,7 +1293,7 @@ module=${1:-null}
 shift $(($# >= 1 ? 1 : 0))
 
 case $module in
-    paas|license|cmdb|job|gse|yum|consul|pypi|bkenv|rabbitmq|zk|mongodb|influxdb|license|cert|nginx|usermgr|appo|bklog|es7|python|appt|kafka|beanstalk|fta|dbcheck|controller|lesscode|node|bkapi|apigw|etcd|apisix)
+    paas|license|cmdb|job|gse|yum|consul|pypi|bkenv|rabbitmq|zk|mongodb|influxdb|license|cert|nginx|usermgr|appo|bklog|es7|python|appt|kafka|beanstalk|fta|dbcheck|controller|lesscode|node|bkapi|apigw|etcd|apisix|nfs)
         install_"${module}" $@
         ;;
     paas_plugins)
