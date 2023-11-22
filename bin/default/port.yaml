@@ -205,12 +205,12 @@ redis:
 #    port: 6379
 #    consul: redis-paasplugins
 #    name: redis
-#redis_cluster:
-#  default:
-#    # 默认第一个端口为单节点
-#    port: 6379,26379
-#    consul: redis-sentinel
-#    master_name: mymaster 
+redis_sentinel:
+ default:
+   # 默认第一个端口为单节点
+   port: 6380,26379
+   consul: redis-sentinel
+   master_name: mymaster 
 rabbitmq:
   default:
     port: 5672

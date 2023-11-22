@@ -137,8 +137,6 @@ $LOG_DIR/*.log {
     compress
     notifempty
     sharedscripts
-    postrotate
-        /bin/kill -SIGUSR1 \`cat $DATA_DIR/${NODE_NAME}.pid 2> /dev/null\` 2> /dev/null || true
     endscript
 }
 EOF

@@ -53,9 +53,7 @@ case $service in
         _bkc sync cert
         _bkc install cert
         _bkc install yum
-        if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
-            _bkc install nfs
-        fi
+        _bkc install nfs
         ./bkcli install controller 1 # 安装EPEL源默认不提供的rpm包
         echo ""
         echo "如果以上步骤执行没有报错, 说明你已经完成蓝鲸部署基础依赖的安装, 请按照文档继续执行剩余步骤"

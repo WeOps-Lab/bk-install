@@ -10,9 +10,14 @@ set -e
 
 install_nfs () {
     emphasize "install nfs on host: ${BK_NFS_IP_COMMA}"
-    "${SELF_DIR}"/pcmd.sh -m nfs "${CTRL_DIR}/bin/install_nfs.sh -d ${INSTALL_PATH}/public/nfs"
-    emphasize "sign host as module"
-    pcmdrc "${BK_NFS_IP_COMMA}" "_sign_host_as_module nfs"
+    if [[ ! -z "${BK_NFS_IP_COMMA}" ]]; then
+        "${SELF_DIR}"/pcmd.sh -m nfs "${CTRL_DIR}/bin/install_nfs.sh -d ${INSTALL_PATH}/public/nfs"
+        emphasize "sign host as module"
+        pcmdrc "${BK_NFS_IP_COMMA}" "_sign_host_as_module nfs"
+    else
+        emphasize "no nfs host"
+    fi
+
 }
 
 install_yum () {
