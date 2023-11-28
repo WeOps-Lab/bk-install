@@ -66,11 +66,13 @@ case $service in
         _bkc install license
         _bkc install mysql
         _bkc install redis
+        _bkc install redis_sentinel
         _bkc start mysql
         _bkc install nginx
 
         _bkc start license
         _bkc start redis
+        _bkc start redis_sentinel
         _bkc start nginx
 
         _bkc sync bkiam
