@@ -27,6 +27,6 @@ redis_storage="[{\"type\":1,\"biz_id\":$bk_biz_id,\"cluster_index\":1,\"data_set
 $zkbin -server "$gse_zk_addr" create /gse/config/etc/dataserver/data/1001 "$redis_storage"
 
 # create redis storage
-redis_host="[{\"host\":\"$BK_CMDB_REDIS_HOST\",\"port\":$BK_CMDB_REDIS_PORT,\"type\":4,\"passwd\":\"$BK_CMDB_REDIS_PASSWORD\",\"mastername\":\"$BK_CMDB_REDIS_MASTER_NAME\"}]"
+redis_host="[{\"host\":\"$BK_CMDB_REDIS_SENTINEL_HOST\",\"port\":$BK_CMDB_REDIS_SENTINEL_PORT,\"type\":4,\"passwd\":\"$BK_CMDB_REDIS_PASSWORD\",\"mastername\":\"$BK_CMDB_REDIS_MASTER_NAME\"}]"
 $zkbin -server "$gse_zk_addr" create /gse/config/etc/dataserver/storage/all/0_1 "$redis_host"
 $zkbin -server "$gse_zk_addr" set /gse/config/etc/dataserver/storage/all/0_1 "$redis_host"

@@ -69,6 +69,7 @@ mysql	mysqld	mysql			3306	TCP
 nginx	nginx	nginx	/usr/local/openresty/nginx/sbin/nginx	0.0.0.0	80	TCP
 rabbitmq	beam.smp	rabbitmq	beam.smp	0.0.0.0	5672	TCP
 redis	redis-server	redis-server			6379	TCP
+redis_sentinel	redis_sentinel	redis_sentinel			6379	TCP
 zookeeper	java	zookeeper	/etc/zookeeper		2181	TCP
 consul-template	consul-template	consul-template	/etc/consul-template/conf.d	0.0.0.0		TCP
 						

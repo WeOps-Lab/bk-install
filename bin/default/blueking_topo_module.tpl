@@ -49,6 +49,7 @@ public	mysql
 public	nginx
 public	rabbitmq
 public	redis
+public	redis_sentinel
 public	zookeeper
 public 	openresty
 public 	consul-template
