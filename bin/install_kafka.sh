@@ -143,7 +143,8 @@ log "生成默认的kafka主配置文件 /etc/kafka/server.properties"
 # 添加KAFKA_HEAP_OPTS
 # 检查文件中是否存在 KAFKA_HEAP_OPTS
 if grep -q "KAFKA_HEAP_OPTS" /etc/sysconfig/kafka; then
-  echo "KAFKA_HEAP_OPTS already exists. Skipping..."
+  sed -i 's/^KAFKA_HEAP_OPTS.*/KAFKA_HEAP_OPTS=\"-Xmx2g -Xms2g\"/g' /etc/sysconfig/kafka
+  echo "KAFKA_HEAP_OPTS already exists. Cover it..."
 else
   # 如果文件中不存在 KAFKA_HEAP_OPTS，则将其添加到文件末尾
   echo "KAFKA_HEAP_OPTS=\"-Xmx2g -Xms2g\"" >> /etc/sysconfig/kafka
@@ -162,7 +163,7 @@ socket.send.buffer.bytes=67108864
 socket.receive.buffer.bytes=67108864
 socket.request.max.bytes=104857600
 num.partitions=1
-default.replication.factor=${REPLICA_FACTOR}
+offsets.topic.replication.factor=${REPLICA_FACTOR}
 num.recovery.threads.per.data.dir=1
 log.retention.hours=72
 log.retention.bytes=21474836480
