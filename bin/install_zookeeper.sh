@@ -142,6 +142,8 @@ maxClientCnxns=60
 autopurge.snapRetainCount=5
 autopurge.purgeInterval=8
 
+# zookeeper升级新增配置
+admin.enableServer=false
 # specify all zookeeper servers
 # The fist port is used by followers to connect to the leader
 # The second one is used for leader election
