@@ -181,32 +181,81 @@ install_mysql_common () {
 _install_mysql () {
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py  -s -P ${SELF_DIR}/bin/default/port.yaml)
     projects=${_projects["mysql"]}
-        # 安装 mysql
-    local mysql_ip=$BK_MYSQL_IP0
-    if ! grep "${mysql_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep "BK_MYSQL_.*_IP_COMMA" >/dev/null; then
-        emphasize "install mysql on host: ${mysql_ip}"
-        "${CTRL_DIR}"/pcmd.sh -H "${mysql_ip}" "${CTRL_DIR}/bin/install_mysql.sh -n 'default' -P ${_project_port["mysql,default"]} -p '$BK_MYSQL_ADMIN_PASSWORD' -d '${INSTALL_PATH}'/public/mysql -l '${INSTALL_PATH}'/logs/mysql -b \$LAN_IP -i"
-        # # mysql机器配置login-path
-        emphasize "set mysql login path 'default-root' on host: ${mysql_ip}"
-        # TODO: 使用pcmd时会出现意想不到的bug，可能和tty allocation有关，待定位，临时用原生ssh代替
-        ssh "${mysql_ip}" "$CTRL_DIR/bin/setup_mysql_loginpath.sh -n 'default-root' -h '/var/run/mysql/default.mysql.socket' -u 'root' -p '$BK_MYSQL_ADMIN_PASSWORD'"
-        for project in ${projects[@]}; do
-           target_ip=BK_MYSQL_${project^^}_IP_COMMA
-           if [[ -z ${!target_ip} ]]; then 
-               # 中控机配置login-path
-               emphasize "set mysql login path ${_project_consul["mysql,${project}"]} on host: 中控机"
-               "${SELF_DIR}"/bin/setup_mysql_loginpath.sh -n "${_project_consul["mysql,${project}"]}" -h "${mysql_ip}" -u "root" -p "$BK_MYSQL_ADMIN_PASSWORD"
-           fi
-        done
-        emphasize "register mysql consul on host: ${mysql_ip}"
-        reg_consul_svc "${_project_consul["mysql,default"]}" "${_project_port["mysql,default"]}" "${mysql_ip}"
-
-        # 中控机配置 default login-path
-        emphasize "set mysql ${_project_consul["mysql,default"]} login path on host: 中控机"
-        "${SELF_DIR}"/bin/setup_mysql_loginpath.sh -n "${_project_consul["mysql,default"]}" -h "${mysql_ip}" -u "root" -p "$BK_MYSQL_ADMIN_PASSWORD"
+    # 安装 mysql
+    count_master=$(cat install.config |grep mysql |grep master |wc -l)
+    if ! [ -z "${BK_MYSQL_SLAVE_IP_COMMA}" ];then
+            if is_string_in_array "${BK_MYSQL_MASTER_IP_COMMA}" "${BK_MYSQL_SLAVE_IP[@]}";then
+                    err "mysql(master) mysql(slave) 不可部署在同一台服务器"
+            fi
     fi
-    emphasize "sign host as module"
-    pcmdrc mysql "_sign_host_as_module mysql"
+    if [ $count_master -gt 1 ]; then
+            echo "mysql(master)只能部署一个。"
+            exit 1
+    else
+            master_ip=`cat install.config | grep mysql | grep master | awk '{print $1}'`
+            if [ -n "$master_ip" ];then
+                    mysql_ip=$BK_MYSQL_MASTER_IP0
+            else
+                    mysql_ip=$BK_MYSQL_IP0
+            fi
+            emphasize "install mysql on host: ${mysql_ip}"
+            "${CTRL_DIR}"/pcmd.sh -H "${mysql_ip}" "${CTRL_DIR}/bin/install_mysql.sh -n 'default' -P ${_project_port["mysql,default"]} -p '$BK_MYSQL_ADMIN_PASSWORD' -d '${INSTALL_PATH}'/public/mysql -l '${INSTALL_PATH}'/logs/mysql -b \$LAN_IP -i"
+            ## mysql机器配置login-path
+            emphasize "set mysql login path 'default-root' on host: ${mysql_ip}"
+            # TODO: 使用pcmd时会出现意想不到的bug，可能和tty allocation有关，待定位，临时用原生ssh代替
+            ssh "${mysql_ip}" "$CTRL_DIR/bin/setup_mysql_loginpath.sh -n 'default-root' -h '/var/run/mysql/default.mysql.socket' -u 'root' -p '$BK_MYSQL_ADMIN_PASSWORD'"
+            for project in ${projects[@]}; do
+               target_ip=BK_MYSQL_${project^^}_IP_COMMA
+               if [[ -z ${!target_ip} ]]; then 
+                   # 中控机配置login-path
+                   emphasize "set mysql login path ${_project_consul["mysql,${project}"]} on host: 中控机"
+                   "${SELF_DIR}"/bin/setup_mysql_loginpath.sh -n "${_project_consul["mysql,${project}"]}" -h "${mysql_ip}" -u "root" -p "$BK_MYSQL_ADMIN_PASSWORD"
+               fi
+            done
+            emphasize "register mysql consul on host: ${mysql_ip}"
+            reg_consul_svc "${_project_consul["mysql,default"]}" "${_project_port["mysql,default"]}" "${mysql_ip}"
+            for project in ${_projects["mysql"]}; do
+                    reg_consul_svc "${_project_consul["mysql,${project}"]}" "${_project_port["mysql,${project}"]}" "${mysql_ip}"
+            done
+
+            # 中控机配置 default login-path
+            emphasize "set mysql ${_project_consul["mysql,default"]} login path on host: 中控机"
+            "${SELF_DIR}"/bin/setup_mysql_loginpath.sh -n "${_project_consul["mysql,default"]}" -h "${mysql_ip}" -u "root" -p "$BK_MYSQL_ADMIN_PASSWORD"
+        emphasize "sign host as module"
+        pcmdrc mysql "_sign_host_as_module mysql_master"
+    fi
+
+    # 安装slave mysql
+    count_slave=$(cat install.config |grep mysql |grep slave |wc -l)
+    if [ $count_slave -gt 2 ]; then
+            echo "mysql(slave)最多支持部署2台。"
+            exit 1
+    else
+            mysql_slave_ip=$(cat install.config | grep mysql | grep slave | awk '{print $1}')
+            if [ -n "$mysql_slave_ip" ]; then
+                    emphasize "install slave_mysql on host:"
+                    for ip in ${mysql_slave_ip}; do
+                            echo "${ip}"
+                    done
+
+                    "${CTRL_DIR}"/pcmd.sh -m mysql_slave "${CTRL_DIR}/bin/install_mysql.sh -n 'default' -P ${_project_port["mysql,default"]} -p '$BK_MYSQL_ADMIN_PASSWORD' -d '${INSTALL_PATH}'/public/mysql -l '${INSTALL_PATH}'/logs/mysql -b \$LAN_IP -i"
+                    if [ -n "$mysql_slave_ip" ]; then
+                            emphasize "set mysql login path 'default-root' on host:"
+                            for ip in ${mysql_slave_ip}; do
+                                    echo "${ip}"
+                            done
+                    fi  
+                    # TODO: 使用pcmd时会出现意想不到的bug，可能和tty allocation有关，待定位，临时用原生ssh代替
+                    for ip in ${mysql_slave_ip};do
+                            ssh "$ip" "$CTRL_DIR/bin/setup_mysql_loginpath.sh -n 'default-root' -h '/var/run/mysql/default.mysql.socket' -u 'root' -p '$BK_MYSQL_ADMIN_PASSWORD'"
+                            emphasize "register mysql consul on host:"
+                            echo "$ip"
+                    done
+                    pcmdrc mysql "_sign_host_as_module mysql_slave"
+                    # 配置主从
+                    bash ./configure_mysql_master-slave.sh
+            fi
+    fi
 }
 
 install_redis_common () {

@@ -8,8 +8,12 @@ PROGRAM=$(basename "$0")
 VERSION=1.0
 EXITCODE=0
 
+## 加载版本
+CUR_DIR=$(dirname "$(readlink -f "$0")")
+set -a
+source $CUR_DIR/../config/version.txt
+set +a
 # 全局默认变量
-MYSQL_VERSION="5.7.29"
 BIND_ADDR="127.0.0.1"
 PORT=3306
 DATA_DIR="/var/lib/mysql"
@@ -118,6 +122,9 @@ if (( EXITCODE > 0 )); then
     usage_and_exit "$EXITCODE"
 fi
 
+## 卸载 mariadb
+mariadb_list=(mariadb mariadb-server mariadb-common mariadb-errmsg)
+rpm -q --quiet ${mariadb_list[*]} &&  rpm -e  ${mariadb_list[*]}
 
 # 安装依赖
 if ! rpm -ql mysql-community-server-${MYSQL_VERSION} &>/dev/null; then
@@ -129,6 +136,9 @@ install -o mysql -g mysql -d "${LOG_DIR}"
 # 多实例分开datadir
 install -o mysql -g mysql -d "${DATA_DIR}"/"${NAME}"/{tmp,binlog,relaylog,data}
 install -o mysql -g mysql -d /etc/mysql
+
+LAN_IP=$(cat /etc/blueking/env/local.env | awk -F'=' '{print $2}')
+server_id=$(echo $LAN_IP |tr '.' ' ' |tr -d '[:space:]')
 
 # 生成server的my.cnf
 cat > /etc/mysql/"${NAME}.my.cnf" <<EOF
@@ -150,6 +160,7 @@ sql_mode=''
 
 # innodb
 default-storage-engine=innodb
+innodb_buffer_pool_size=10240M
 innodb_data_file_path=ibdata1:1G:autoextend
 innodb_file_format=Barracuda
 innodb_file_per_table=1
@@ -196,8 +207,10 @@ sync_binlog=0
 table_open_cache=2000
 thread_cache_size=8
 wait_timeout=10800
+innodb_temp_data_file_path=ibtmp1:12M:autoextend:max:10G
+expire_logs_days=7
 
-server-id=1
+server-id=${server_id}
 EOF
 
 # 生成client的conf
