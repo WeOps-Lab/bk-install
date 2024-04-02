@@ -8,12 +8,8 @@ PROGRAM=$(basename "$0")
 VERSION=1.0
 EXITCODE=0
 
-## 加载版本
-CUR_DIR=$(dirname "$(readlink -f "$0")")
-set -a
-source $CUR_DIR/../config/version.txt
-set +a
 # 全局默认变量
+MYSQL_VERSION="5.7.29"
 BIND_ADDR="127.0.0.1"
 PORT=3306
 DATA_DIR="/var/lib/mysql"

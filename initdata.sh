@@ -11,7 +11,7 @@ _initdata_mysql () {
     source <(/opt/py36/bin/python ${CTRL_DIR}/qq.py -s -P ${CTRL_DIR}/bin/default/port.yaml)
     local grant_user_list=${_projects["mysql"]}
     # 第一步 对应模块授权对应的mysql  如果没有独有mysql则授权 default mysql
-    for ip in "${BK_MYSQL_IP[@]}"; do
+    for ip in "${BK_MYSQL_IP_COMMA[@]}"; do
         for project in ${grant_user_list[@]}; do
             target=BK_MYSQL_${project^^}_IP_COMMA
             if [[ $project == 'monitorv3' ]]; then

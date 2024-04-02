@@ -34,7 +34,7 @@ for slave_ip in ${SLAVE_HOST[@]};do
         echo ./pcmd.sh -H $slave_ip "mysql --login-path=default-root -e \"CHANGE MASTER TO MASTER_HOST='$MASTER_HOST', MASTER_USER='$MASTER_USER', MASTER_PASSWORD='$MASTER_PASSWORD', MASTER_LOG_FILE='$MASTER_LOG_FILE', MASTER_LOG_POS=$MASTER_LOG_POS;\""
         ./pcmd.sh -H $slave_ip "mysql --login-path=default-root -e \"CHANGE MASTER TO MASTER_HOST='$MASTER_HOST', MASTER_USER='$MASTER_USER', MASTER_PASSWORD='$MASTER_PASSWORD', MASTER_LOG_FILE='$MASTER_LOG_FILE', MASTER_LOG_POS=$MASTER_LOG_POS;\""
         ./pcmd.sh -H $slave_ip "mysql --login-path=default-root -e \"START SLAVE;\""
-        replication_status=$(mysql -u$BK_MYSQL_ADMIN_USER -p"$BK_MYSQL_ADMIN_PASSWORD" -h $slave_ip -P $BK_PAAS_MYSQL_PORT -e "SHOW SLAVE STATUS\G" | grep "Slave_IO_Running:" | awk '{print $2}')
+        replication_status=$(ssh $slave_ip "mysql --login-path=default-root -e 'SHOW SLAVE STATUS\G' | grep 'Slave_IO_Running:' | awk '{print $2}'")
         if [ "$replication_status" == "Yes" ];then
                 green_echo "$slave_ip{slave} -->> $MASTER_HOST{master} [SUCCESS] => 主从复制正常运行"
         else
