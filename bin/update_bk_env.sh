@@ -92,7 +92,7 @@ fi
 
 # 安装基础命令和基础包
 COMMAND_RPM_LIST=(rsync jq expect uuid lsof)
-COMMON_RPM_LIST=(openssl-devel readline-devel libcurl-devel libxml2-devel glibc-devel zlib-devel iproute sysvinit-tools procps-ng bind-utils bash-completion)
+COMMON_RPM_LIST=(openssl-devel readline-devel libcurl-devel libxml2-devel glibc-devel zlib-devel iproute procps-ng bind-utils bash-completion)
 yum -y install "${COMMAND_RPM_LIST[@]}" "${COMMON_RPM_LIST[@]}"
 
 rt=0

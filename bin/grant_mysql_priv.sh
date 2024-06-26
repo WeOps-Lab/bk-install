@@ -106,7 +106,7 @@ fi
 if mysqladmin --login-path="$LOGIN_PATH" ping >/dev/null ; then
     IFS="," read -r -a hosts <<<"$HOST_LIST"
     for h in "${hosts[@]}"; do
-        GRANT_SQL="GRANT ALL ON *.* TO $MYSQL_USER@$h IDENTIFIED BY '$MYSQL_PASSWORD'"
+        GRANT_SQL="create user IF NOT EXISTS $MYSQL_USER@$h identified by '$MYSQL_PASSWORD';ALTER USER  $MYSQL_USER@$h IDENTIFIED WITH mysql_native_password BY '$MYSQL_PASSWORD';GRANT ALL ON *.* TO $MYSQL_USER@$h"
         if ! mysql --login-path="$LOGIN_PATH" -e "$GRANT_SQL"; then
             error "给 $MYSQL_USER@$h 授权失败"
         else

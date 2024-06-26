@@ -1008,8 +1008,8 @@ _install_bkmonitor () {
     migrate_sql $module
     emphasize "grant rabbitmq private for ${module}"
     grant_rabbitmq_pri $module
-    emphasize "install python on host: ${module}"
-    install_python $module
+    #emphasize "install python on host: ${module}"
+    #install_python $module
 
     # 注册app_code
     emphasize "add or update appcode ${BK_MONITOR_APP_CODE}"
@@ -1019,14 +1019,14 @@ _install_bkmonitor () {
     for project in ${projects[@]}; do
         IFS="," read -r -a target_server<<<"${_project_ip["${target_name},${project}"]}"
         for ip in ${target_server[@]}; do
-            python_path=$(get_interpreter_path $module "$project")
+            #python_path=$(get_interpreter_path $module "$project")
             emphasize "install ${module} ${project} on host: ${ip}"
             cost_time_attention
-            if [[ ${python_path} =~ "python" ]]; then
-                "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_bkmonitorv3.sh -b \$LAN_IP -m ${project} --python-path ${python_path} -e ${CTRL_DIR}/bin/04-final/bkmonitorv3.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}"
-            else
-                "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_bkmonitorv3.sh -b \$LAN_IP -m ${project}  -e ${CTRL_DIR}/bin/04-final/bkmonitorv3.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}"
-            fi
+            #if [[ ${python_path} =~ "python" ]]; then
+            #    "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_bkmonitorv3.sh -b \$LAN_IP -m ${project} --python-path ${python_path} -e ${CTRL_DIR}/bin/04-final/bkmonitorv3.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}"
+            #else
+            "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_bkmonitorv3.sh -b \$LAN_IP -m ${project}  -e ${CTRL_DIR}/bin/04-final/bkmonitorv3.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}"
+            #fi
             emphasize "sign host as module"
             pcmdrc "${ip}" "_sign_host_as_module ${module}_${project}"
         done
@@ -1194,8 +1194,8 @@ install_bklog () {
             fi
             emphasize "register ${_project_consul[${target_name},${project}]}  consul on host: ${ip}"
             reg_consul_svc "${_project_consul[${target_name},${project}]}" "${_project_port[${target_name},${project}]}" "${ip}"
-    	    emphasize "sign host as module"
-    	    pcmdrc "${ip}" "_sign_host_as_module bk${module}-${project}"
+            emphasize "sign host as module"
+            pcmdrc "${ip}" "_sign_host_as_module bk${module}-${project}"
         done
     done
 }

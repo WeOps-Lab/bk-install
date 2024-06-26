@@ -19,7 +19,7 @@ done
 
 COMMON_LIST=(pssh parallel zip unzip rsync gawk curl lsof tar sed iproute uuid psmisc wget at \
         rsync jq expect uuid bash-completion lsof openssl-devel readline-devel libcurl-devel libxml2-devel glibc-devel \
-        zlib-devel iproute sysvinit-tools procps-ng bind-utils)
+        zlib-devel iproute procps-ng bind-utils)
 EXTAR_LIST=(mysql-community-client)
 
 if [[ "${EXTAR_INSTALL}" -ne 1 ]]; then

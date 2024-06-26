@@ -141,6 +141,8 @@ case ${module} in
         if [[ ${project} =~ ^[a-z] ]]; then
             if [[ ! ${SERVICES[*]} =~ ${project} ]]; then
                 err "${module} not exist backend module like: ${project}"
+            elif [[ ${project} =~ "nodeman" ]]; then
+                pcmdrc "${target#bk}"  "docker ${action} ${module}-${project}"
             else
                 project="${project/-/_}" # 兼容consul-template 和 consul_template
                 pcmdrc "${target#bk}"  "action_${NODEMAN_SERVICE[${project}]} ${action} ${project}"

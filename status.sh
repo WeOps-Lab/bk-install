@@ -127,6 +127,8 @@ case $module in
                 emphasize "status ${module} ${project} on host: ${_project_ip["${target_name},${project}"]}"
                 if [[ "${module}" =~ "log" ]]; then
                     pcmdrc "${_project_ip["${target_name},${project}"]}" "get_service_status bk-${module}-${project}"
+                elif [[ "${project}" =~ "monitor" ]]; then
+                    pcmdrc "${_project_ip["${target_name},${project}"]}" "docker exec bkmonitorv3-monitor supervisorctl -c /data/bkce/etc/supervisor-bkmonitorv3-monitor.conf status all"
                 else
                     pcmdrc "${_project_ip["${target_name},${project}"]}" "get_service_status bk-${project}"
                 fi
@@ -165,7 +167,7 @@ case $module in
         ;;
     bknodeman|nodeman)
         target_name=${module#bk}
-        pcmdrc "${target_name}" "get_service_status ${SERVICE[${target_name}]} ${SERVICE["consul-template"]} ${SERVICE["nginx"]}"
+        pcmdrc "${target_name}" "docker exec bknodeman-nodeman supervisorctl -c /data/bkce/etc/supervisor-bknodeman-nodeman.conf status all;get_service_status ${SERVICE["consul-template"]} ${SERVICE["nginx"]}"
         ;;
     paas_plugins|paas_plugin)
         pcmdrc "${BK_PAAS_IP0}" "get_service_status bk-paas-plugins-log-alert"

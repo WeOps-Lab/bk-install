@@ -9,7 +9,7 @@ VERSION=1.0
 EXITCODE=0
 
 # 全局默认变量
-MYSQL_VERSION="5.7.29"
+MYSQL_VERSION="8.0.37"
 BIND_ADDR="127.0.0.1"
 PORT=3306
 DATA_DIR="/var/lib/mysql"
@@ -149,9 +149,9 @@ max_connections=3000
 sql_mode=''
 
 # innodb
+innodb_buffer_pool_size=2G
 default-storage-engine=innodb
 innodb_data_file_path=ibdata1:1G:autoextend
-innodb_file_format=Barracuda
 innodb_file_per_table=1
 innodb_flush_log_at_trx_commit=0
 innodb_lock_wait_timeout=50
@@ -176,14 +176,11 @@ myisam_sort_buffer_size=64M
 net_read_timeout=999
 net_write_timeout=999
 performance_schema=OFF
-query_cache_size=0
-query_cache_type=1
 read_buffer_size=2M
 relay_log_recovery=1
 relay-log=${DATA_DIR}/${NAME}/relaylog/relay-log.bin
 replicate-wild-ignore-table=mysql.%
 secure_file_priv=
-show_compatibility_56=on
 skip-external-locking
 skip-name-resolve
 skip-symbolic-links
@@ -277,7 +274,7 @@ if systemd-analyze verify "/etc/systemd/system/mysql@${NAME}.service"; then
     if [[ -n "$PASSWORD" && $IS_INIT -eq 1 ]]; then
         if MYSQL_PWD="$TMP_ROOT_PASSWORD" /usr/bin/mysql --defaults-file="/etc/mysql/${NAME}.client.conf" \
             -uroot --connect-expired-password \
-            -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('$PASSWORD')"; then
+            -e "SET PASSWORD FOR 'root'@'localhost' = '$PASSWORD'"; then
             log "设置mysql的root@localhost密码为: ${PASSWORD:0:${#PASSWORD}-4}****"
         fi
     fi
