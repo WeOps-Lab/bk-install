@@ -962,7 +962,7 @@ install_saas () {
 
             _install_saas $env $app_code $pkg_name
             assert " SaaS application $app_code has been deployed successfully" "Deploy saas $app_code failed."
-            set_console_desktop ${app_code}
+            # set_console_desktop ${app_code}
         done
     else
         all_app=( $(_find_all_saas) )
@@ -973,7 +973,7 @@ install_saas () {
         for app_code in $(_find_all_saas); do
             _install_saas "$env" "$app_code" $(_find_latest_one "$app_code")
             assert " SaaS application $app_code has been deployed successfully" "Deploy saas $app_code failed."
-            set_console_desktop ${app_code}
+            # set_console_desktop ${app_code}
         done
     fi
 }
