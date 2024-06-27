@@ -41,7 +41,10 @@ cat <<EOF > /etc/docker/daemon.json
 EOF
 
 mkdir -p $BK_HOME/public/paas_agent/docker
-systemctl enable --now docker
+systemctl enable docker
+# 等待contianerd服务启动10秒
+sleep 10
+systemctl start docker
 # 为了让blueking身份运行的paasagent也能运行docker cli命令。
 usermod -G docker blueking
 

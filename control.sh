@@ -91,7 +91,11 @@ case ${module} in
                 IFS="," read -r -a target_server<<<"${_project_ip["${target_name},${project}"]}"
                 for ip in "${target_server[@]}"; do
                     emphasize "${action} ${module} ${project} on host: ${ip}"
-                    pcmdrc "$ip" "action_${module} ${action} ${project}"
+                    if [[ $project == "monitor" ]]; then
+                        pcmdrc "$ip" "docker ${action} bkmonitorv3-${project}"
+                    else
+                        pcmdrc "$ip" "action_${module} ${action} ${project}"
+                    fi
                 done
             done
         else
@@ -99,7 +103,11 @@ case ${module} in
             IFS="," read -r -a target_server<<<"${_project_ip["${target_name},${project}"]}"
             for ip in "${target_server[@]}"; do
                 emphasize "${action} ${module} ${project} on host: ${ip}"
-                pcmdrc "$ip" "action_${module} ${action} ${project}"
+                if [[ $project == "monitor" ]]; then
+                    pcmdrc "$ip" "docker ${action} bkmonitorv3-${project}"
+                else
+                    pcmdrc "$ip" "action_${module} ${action} ${project}"
+                fi
             done
         fi
         ;;

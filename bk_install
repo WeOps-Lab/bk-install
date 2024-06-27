@@ -219,7 +219,6 @@ case $service in
         echo "等待bknodeman启动成功"
         sleep 10
         _bkc initdata nodeman
-        _bkc start nodeman
         ./bkcli status nodeman
         echo 
         echo "如果以上步骤执行没有报错, 说明你已经完成 $(green_echo 节点管理)的部署, 并请按照文档继续执行剩余步骤"

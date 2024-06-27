@@ -219,8 +219,17 @@ case $BKMONITOR_MODULE in
         wait_ns_alive  influxdb-proxy.bkmonitorv3.service.consul || fail "influxdb-proxy.bkmonitorv3.service.consul 无法解析"
         if [ "$(docker ps -aq -f name=bkmonitorv3-monitor)" ]; then
             echo "Container bkmonitorv3-monitor is running. Stopping and removing it now."
-            docker rm -f bkmonitorv3-monitor
+            docker stop bkmonitorv3-monitor
+            docker rm -f bkmonitorv3-monitor 
+            rm -vf /var/run/bkmonitorv3/celerybeat.pid /var/run/bkmonitorv3/monitor-supervisord.pid /var/run/bkmonitorv3/monitor-supervisord.sock
         fi
+        # 生成docker用的supervisor配置文件
+        sed "s@/data/bkce/.envs/bkmonitorv3-monitor@/cache/.bk/env@" /data/bkce/etc/supervisor-bkmonitorv3-monitor.conf > /data/bkce/etc/supervisor-bkmonitorv3-monitor.docker.conf
+        sed -i 's@/cache/.bk/env/bin/python@/cache/.bk/env/bin/python3.6_e@g' /data/bkce/etc/supervisor-bkmonitorv3-monitor.docker.conf
+        # 生成docker用的on_migrate文件
+        sed "2,9s/^/#/" /data/bkce/bkmonitorv3/monitor/on_migrate > /data/bkce/bkmonitorv3/monitor/on_migrate.docker
+        chmod 0755 /data/bkce/bkmonitorv3/monitor/on_migrate.docker
+        # 启动容器
         docker run -itd \
         -v /data/bkce/bkmonitorv3/monitor:/data/bkce/bkmonitorv3/monitor \
         -v /data/bkce/logs/bkmonitorv3:/data/bkce/logs/bkmonitorv3 \
@@ -234,7 +243,7 @@ case $BKMONITOR_MODULE in
         (
             set +u +e
             # 设置加密解释器用得变量
-            docker exec bkmonitorv3-monitor bash -c "export INFLUXDB_BKMONITORV3_IP0=$INFLUXDB_BKMONITORV3_IP0;export INFLUXDB_BKMONITORV3_PORT=$INFLUXDB_BKMONITORV3_PORT;export INFLUXDB_BKMONITORV3_USER=$INFLUXDB_BKMONITORV3_USER;export INFLUXDB_BKMONITORV3_PASS=$INFLUXDB_BKMONITORV3_PASS;export BKMONITORV3_INFLUXDB_PROXY_HOST=$BKMONITORV3_INFLUXDB_PROXY_HOST;export BKMONITORV3_INFLUXDB_PROXY_PORT=$BKMONITORV3_INFLUXDB_PROXY_PORT;export ES7_HOST=$ES7_HOST;export ES7_REST_PORT=$ES7_REST_PORT;export ES7_USER=$ES7_USER;export ES7_PASSWORD=$ES7_PASSWORD;export KAFKA_HOST=$KAFKA_HOST;export KAFKA_PORT=$KAFKA_PORT;bash -x on_migrate 1>&2 2>/dev/null;"
+            docker exec bkmonitorv3-monitor bash -c "export INFLUXDB_BKMONITORV3_IP0=$INFLUXDB_BKMONITORV3_IP0;export INFLUXDB_BKMONITORV3_PORT=$INFLUXDB_BKMONITORV3_PORT;export INFLUXDB_BKMONITORV3_USER=$INFLUXDB_BKMONITORV3_USER;export INFLUXDB_BKMONITORV3_PASS=$INFLUXDB_BKMONITORV3_PASS;export BKMONITORV3_INFLUXDB_PROXY_HOST=$BKMONITORV3_INFLUXDB_PROXY_HOST;export BKMONITORV3_INFLUXDB_PROXY_PORT=$BKMONITORV3_INFLUXDB_PROXY_PORT;export ES7_HOST=$ES7_HOST;export ES7_REST_PORT=$ES7_REST_PORT;export ES7_USER=$ES7_USER;export ES7_PASSWORD=$ES7_PASSWORD;export KAFKA_HOST=$KAFKA_HOST;export KAFKA_PORT=$KAFKA_PORT;bash -x on_migrate.docker 1>&2 2>/dev/null;"
         )
         ;;
     transfer) 

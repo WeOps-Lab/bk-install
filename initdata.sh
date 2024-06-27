@@ -60,7 +60,7 @@ _initdata_mysql () {
 _initdata_nodeman () {
     local ip=$BK_NODEMAN_IP0
     emphasize "copy file to nginx"
-    "${CTRL_DIR}"/pcmd.sh -H "$ip" "workon bknodeman-nodeman;export BK_FILE_PATH=${INSTALL_PATH}/bknodeman/cert/saas_priv.txt; runuser -u blueking ./bin/manage.sh copy_file_to_nginx"
+    "${CTRL_DIR}"/pcmd.sh -H "$ip" "docker exec bknodeman-nodeman bash -c \"export BK_FILE_PATH=${INSTALL_PATH}/bknodeman/cert/saas_priv.txt;./bin/manage.sh copy_file_to_nginx\""
     emphasize "init gse plugins"
     gse_agent_pkg=$(_find_latest_gse_agent)
     emphasize "pack gse client with plugin"
@@ -73,7 +73,7 @@ _initdata_nodeman () {
     chown -R blueking.blueking "${BK_PKG_SRC_PATH}"/gse_plugins/ 
     rsync -v "${BK_PKG_SRC_PATH}"/gse_plugins/*.tgz "$ip":"${INSTALL_PATH}"/bknodeman/nodeman/official_plugin/
     emphasize "init official plugins on host: nodeman"
-    "${CTRL_DIR}"/pcmd.sh -H "$ip" "workon bknodeman-nodeman;export BK_FILE_PATH=${INSTALL_PATH}/bknodeman/cert/saas_priv.txt; rm -fv ./official_plugin/pluginscripts-*.tgz; ./bin/manage.sh init_official_plugins"
+    "${CTRL_DIR}"/pcmd.sh -H "$ip" "docker exec bknodeman-nodeman bash -c \"export BK_FILE_PATH=${INSTALL_PATH}/bknodeman/cert/saas_priv.txt; rm -fv ./official_plugin/pluginscripts-*.tgz; ./bin/manage.sh init_official_plugins\""
     # 同步python包到download目录
     emphasize "sync py36.tgz to nodeman host"
     rsync -avz "${BK_PKG_SRC_PATH}"/python/py36.tgz "$ip":"${INSTALL_PATH}"/public/bknodeman/download/

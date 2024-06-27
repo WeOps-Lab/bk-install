@@ -164,17 +164,6 @@ if ! rpm -q "${RPM_DEP[@]}" >/dev/null; then
     yum -y install "${RPM_DEP[@]}"
 fi
 
-# 安装虚拟环境和pip包
-"${SELF_DIR}"/install_py_venv_pkgs.sh -e -p "$PYTHON_PATH" \
-    -n "${MODULE}-nodeman" \
-    -w "${PREFIX}/.envs" -a "$PREFIX/$MODULE/nodeman" \
-    -s "$PREFIX"/bknodeman/support-files/pkgs \
-    -r "$PREFIX/$MODULE/nodeman/requirements.txt"
-if [[ "$PYTHON_PATH" = *_e* ]]; then
-    # 拷贝加密解释器 //todo
-    cp -a "${PYTHON_PATH}"_e "$PREFIX/.envs/${MODULE}-nodeman/bin/python"
-fi
-
 # 渲染配置
 if [[ -r /etc/blueking/env/local.env ]]; then
     . /etc/blueking/env/local.env
@@ -193,6 +182,8 @@ sed "s@/data/bkce/.envs/bknodeman-nodeman@/cache/.bk/env@" /data/bkce/etc/superv
 if [ "$(docker ps -aq -f name=bknodeman-nodeman)" ]; then
     echo "Container bknodeman-nodeman is running. Stopping and removing it now."
     docker rm -f bknodeman-nodeman
+    # 清理相关的pid文件
+    rm -vf /var/run/bknodeman/{celerybeat.pid,nodeman-supervisord.pid,nodeman-supervisord.sock}
 fi
 
 docker run -itd \

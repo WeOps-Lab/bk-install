@@ -137,6 +137,8 @@ case $module in
             emphasize "status ${module} ${project} on host: ${_project_ip["${target_name},${project}"]}"
             if [[ "${module}" =~ "log" ]]; then
                 pcmdrc "${_project_ip["${target_name},${project}"]}" "get_service_status bk-${module}-${project}"
+            elif [[ "${project}" =~ "monitor" ]]; then
+                pcmdrc "${_project_ip["${target_name},${project}"]}" "docker exec bkmonitorv3-monitor supervisorctl -c /data/bkce/etc/supervisor-bkmonitorv3-monitor.conf status all"
             else
                 pcmdrc "${_project_ip["${target_name},${project}"]}" "get_service_status bk-${project}"
             fi

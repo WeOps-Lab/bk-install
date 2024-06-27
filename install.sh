@@ -1004,6 +1004,8 @@ _install_bkmonitor () {
     if ! [[ -z "${project}" ]]; then 
         projects=$project
     fi
+    emphasize "install docker on host: ${module}"
+    "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_docker_for_paasagent.sh"
     emphasize "migrate $module sql"
     migrate_sql $module
     emphasize "grant rabbitmq private for ${module}"
@@ -1068,10 +1070,10 @@ install_nodeman () {
     local target_name=$(map_module_name $module)
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -p ${BK_PKG_SRC_PATH}/${target_name}/projects.yaml -P ${SELF_DIR}/bin/default/port.yaml)
     local projects=${_projects["${module}"]}
+    emphasize "install docker on host: ${module}"
+    "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_docker_for_paasagent.sh"
     emphasize "grant rabbitmq private for ${module}"
     grant_rabbitmq_pri $module
-    emphasize "install python on host: ${module}"
-    install_python $module
     # 注册app_code
     emphasize "add or update appcode ${BK_NODEMAN_APP_CODE}"
     add_or_update_appcode "$BK_NODEMAN_APP_CODE" "$BK_NODEMAN_APP_SECRET"
@@ -1099,9 +1101,6 @@ install_nodeman () {
     # openresty 服务器上安装consul-template
     emphasize "install consul template on host: ${module}"
     install_consul_template ${module} "${BK_NODEMAN_IP_COMMA}"
-
-    # 启动
-    "${SELF_DIR}"/pcmd.sh -m ${module} "systemctl start bk-nodeman.service"
 
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
