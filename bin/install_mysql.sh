@@ -11,7 +11,7 @@ EXITCODE=0
 ## 加载版本
 CUR_DIR=$(dirname "$(readlink -f "$0")")
 set -a
-source $CUR_DIR/../config/version.txt
+MYSQL_VERSION=5.7.43
 set +a
 # 全局默认变量
 BIND_ADDR="127.0.0.1"

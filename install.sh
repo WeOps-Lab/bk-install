@@ -541,7 +541,7 @@ install_ssm () {
     for project in ${projects[@]}; do
         emphasize "install ${target_name}-${project} on host: ${BK_SSM_IP_COMMA}"
         "${SELF_DIR}"/pcmd.sh -H "${_project_ip["${target_name},${project}"]}" \
-                 "${CTRL_DIR}/bin/install_bkssm.sh -e '${CTRL_DIR}/bin/04-final/bkssm.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
+                "${CTRL_DIR}/bin/install_bkssm.sh -e '${CTRL_DIR}/bin/04-final/bkssm.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
         emphasize "register  ${consul} consul server  on host: ${BK_SSM_IP_COMMA}"
         reg_consul_svc "${_project_consul[${target_name},${project}]}"  "${_project_port[${target_name},${project}]}"  "${_project_ip[${target_name},${project}]}"
     done
@@ -561,7 +561,7 @@ install_auth () {
     for project in ${projects[@]}; do
         emphasize "install ${target_name}-${project} on host: ${BK_SSM_IP_COMMA}"
         "${SELF_DIR}"/pcmd.sh -m $module \
-                 "${CTRL_DIR}/bin/install_bkauth.sh -e '${CTRL_DIR}/bin/04-final/bkauth.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
+                "${CTRL_DIR}/bin/install_bkauth.sh -e '${CTRL_DIR}/bin/04-final/bkauth.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
         emphasize "register  ${consul} consul server  on host: ${BK_AUTH_IP_COMMA}"
         reg_consul_svc "${_project_consul[${target_name},${project}]}"  "${_project_port[${target_name},${project}]}"  "${_project_ip[${target_name},${project}]}"
     done
@@ -597,7 +597,7 @@ _install_cmdb_project () {
         for project in ${project[@]}; do
             emphasize "install ${module}-${project} on host: $module"
             "${SELF_DIR}"/pcmd.sh -H "${_project_ip["${target_name},${project}"]}" \
-                     "${CTRL_DIR}/bin/install_cmdb.sh -e '${CTRL_DIR}/bin/04-final/cmdb.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -m '${project}'"
+                    "${CTRL_DIR}/bin/install_cmdb.sh -e '${CTRL_DIR}/bin/04-final/cmdb.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -m '${project}'"
         done
     fi
     emphasize "start bk-cmdb.target on host: ${module}"
@@ -991,7 +991,7 @@ install_usermgr () {
         for ip in "${BK_USERMGR_IP[@]}"; do
             emphasize "install ${module} ${project} on host: ${BK_USERMGR_IP_COMMA} "
             "${SELF_DIR}"/pcmd.sh -H "${ip}" \
-                     "${CTRL_DIR}/bin/install_usermgr.sh -e ${CTRL_DIR}/bin/04-final/usermgr.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH} --python-path ${python_path}"
+                    "${CTRL_DIR}/bin/install_usermgr.sh -e ${CTRL_DIR}/bin/04-final/usermgr.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH} --python-path ${python_path}"
             reg_consul_svc "${_project_consul[${target_name},${project}]}" "${_project_port[${target_name},${project}]}" "${ip}"
         done
     done

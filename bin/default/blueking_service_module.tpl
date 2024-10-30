@@ -66,6 +66,8 @@ influxdb	influxd	influxdb			8086	TCP
 kafka	java	kafka	/etc/kafka/server.properties		9092	TCP
 mongodb	mongod	mongod	/etc/mongod.conf	127.0.0.1	27017	TCP
 mysql	mysqld	mysql			3306	TCP
+mysql_master	mysqld	mysql			3306	TCP
+mysql_slave	mysqld	mysql			3306	TCP
 nginx	nginx	nginx	/usr/local/openresty/nginx/sbin/nginx	0.0.0.0	80	TCP
 rabbitmq	beam.smp	rabbitmq	beam.smp	0.0.0.0	5672	TCP
 redis	redis-server	redis-server			6379	TCP

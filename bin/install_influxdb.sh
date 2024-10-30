@@ -143,6 +143,30 @@ yum -y install influxdb-${INFLUXDB_VERSION}
 # 创建目录
 install -d -o influxdb -g influxdb "$DATA_DIR"/{meta,data} "${WAL_DIR}" "${LOG_DIR}"
 
+# 生成systemd配置文件
+if [[ ! -f /etc/systemd/system/influxdb.service ]]; then
+    echo "创建influxdb systemd配置文件"
+    cat <<"EOF" > /etc/systemd/system/influxdb.service
+[Unit]
+Description=InfluxDB is an open-source, distributed, time series database
+Documentation=https://docs.influxdata.com/influxdb/
+After=network-online.target
+
+[Service]
+User=influxdb
+Group=influxdb
+LimitNOFILE=65536
+EnvironmentFile=-/etc/default/influxdb
+ExecStart=/usr/bin/influxd -config /etc/influxdb/influxdb.conf $INFLUXD_OPTS
+KillMode=control-group
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+Alias=influxd.service
+EOF
+fi
+
 # 修改默认的 /etc/influxdb/influxdb.conf
 if [[ ! -r /etc/influxdb/influxdb.conf.orig ]]; then
     cp -a /etc/influxdb/influxdb.conf{,.orig}
