@@ -1,5 +1,6 @@
 #!/bin/bash
-source utils.fc
+source ~/.bkrc
+source /data/install/utils.fc
 
 red_echo ()      { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[031;1m$@\033[0m"; }
 green_echo ()    { [ "$HASTTY" == 0 ] && echo "$@" || echo -e "\033[032;1m$@\033[0m"; }

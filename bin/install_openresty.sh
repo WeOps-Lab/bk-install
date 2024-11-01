@@ -12,7 +12,7 @@ EXITCODE=0
 
 # 全局默认变量
 PREFIX=/data/bkee
-OPENRESTY_VERSION=1.15.8.3
+OPENRESTY_VERSION=1.22.0
 
 usage () {
     cat <<EOF

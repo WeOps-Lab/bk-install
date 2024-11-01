@@ -267,10 +267,18 @@ _install_redis () {
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
     if [ -z  "${project}" ]; then
         for redis_ip in "${BK_REDIS_IP[@]}"; do
-            if ! grep "${redis_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep -v "CLUSTER" | grep "BK_REDIS_.*_IP_COMM" >/dev/null; then
+            # 仅redis master节点执行动作
+            if [[ $redis_ip == $BK_REDIS_MASTER_IP ]]; then
+                emphasize "install redis master on host: ${redis_ip}"
                 "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis.sh -n '${_project_name["redis,default"]}' -p '${_project_port["redis,default"]}' -a '${BK_REDIS_ADMIN_PASSWORD}' -b \$LAN_IP"
                 emphasize "register ${_project_consul["redis,default"]} on host $redis_ip"
                 reg_consul_svc "${_project_consul["redis,default"]}" "${_project_port["redis,default"]}" "${redis_ip}"
+                continue
+            fi
+            if ! grep "${redis_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep -v "CLUSTER" | grep "BK_REDIS_.*_IP_COMM" >/dev/null; then
+                "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis.sh -n '${_project_name["redis,default"]}' -p '${_project_port["redis,default"]}' -a '${BK_REDIS_ADMIN_PASSWORD}' -b \$LAN_IP"
+                emphasize "register ${_project_consul["redis,default"]} on host $redis_ip"
+                # reg_consul_svc "${_project_consul["redis,default"]}" "${_project_port["redis,default"]}" "${redis_ip}"
             fi
         done
     fi
@@ -1034,7 +1042,7 @@ install_saas () {
 
             _install_saas $env $app_code $pkg_name
             assert " SaaS application $app_code has been deployed successfully" "Deploy saas $app_code failed."
-            set_console_desktop ${app_code}
+            #set_console_desktop ${app_code}
         done
     else
         all_app=( $(_find_all_saas) )
@@ -1045,7 +1053,7 @@ install_saas () {
         for app_code in $(_find_all_saas); do
             _install_saas "$env" "$app_code" $(_find_latest_one "$app_code")
             assert " SaaS application $app_code has been deployed successfully" "Deploy saas $app_code failed."
-            set_console_desktop ${app_code}
+            #set_console_desktop ${app_code}
         done
     fi
 }
@@ -1325,7 +1333,7 @@ install_lesscode () {
     pcmdrc nginx "_sign_host_as_module consul-template"
     
     emphasize "set bk_lesscode as desktop display by default"
-    set_console_desktop "bk_lesscode"
+    #set_console_desktop "bk_lesscode"
 }
 
 install_bkapi () {
@@ -1341,6 +1349,208 @@ install_bkapi () {
     cost_time_attention
     "${CTRL_DIR}"/pcmd.sh -m nginx "${CTRL_DIR}/bin/install_bkapi_check.sh -p ${INSTALL_PATH} -s ${BK_PKG_SRC_PATH} -m ${module}"
 
+}
+
+install_weopsconsul () {
+    local module=weopsconsul
+    emphasize "install init weopsconsul on host: ${BK_WEOPSCONSUL_INIT_IP}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_WEOPSCONSUL_INIT_IP}" "${CTRL_DIR}/bin/install_weops_consul.sh -i -k ${WEOPS_CONSUL_KEYSTR_32BYTES} -b ${BK_WEOPSCONSUL_INIT_IP}"
+    emphasize "install weopsconsul on host: ${BK_WEOPSCONSUL_IP_COMMA}"
+    for ip in ${BK_WEOPSCONSUL_IP[@]}; do
+        if [[ $ip == ${BK_WEOPSCONSUL_INIT_IP} ]]; then
+            emphasize "skip install weopsconsul on host: ${ip}"
+            continue
+        fi
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_consul.sh" -b "${ip}" -k "${WEOPS_CONSUL_KEYSTR_32BYTES}" -j "${BK_WEOPSCONSUL_INIT_IP}"
+    done
+}
+
+install_prometheus () {
+    local module=prometheus
+    # 如果没有prometheus master节点，退出并提示
+    if [[ ${#BK_PROMETHEUS_MASTER_IP[@]} -eq 0 ]]; then
+        err "prometheus 节点数为0,不支持"
+    fi
+    emphasize "install prometheus master on host: ${ip}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_PROMETHEUS_MASTER_IP}" "${CTRL_DIR}/bin/install_prometheus.sh" -a "${WEOPS_PROMETHEUS_PASSWORD}" -u '${WEOPS_PROMETHEUS_USER}' -s "${WEOPS_PROMETHEUS_SECRET_BASE64}" -b "${BK_PROMETHEUS_MASTER_IP}" -m true
+    emphasize "install prometheus slave on host: ${BK_PROMETHEUS_SLAVE_IP}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_PROMETHEUS_SLAVE_IP}" "${CTRL_DIR}/bin/install_prometheus.sh" -a "${WEOPS_PROMETHEUS_PASSWORD}" -u '${WEOPS_PROMETHEUS_USER}' -s "${WEOPS_PROMETHEUS_SECRET_BASE64}" -b "${BK_PROMETHEUS_SLAVE_IP}" -m false
+    for ip in ${BK_NGINX_IP[@]}; do
+        emphasize "install prometheus nginx on host: ${ip}"
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_prometheus_nginx.sh -m ${BK_PROMETHEUS_MASTER_IP} -s ${BK_PROMETHEUS_SLAVE_IP}"
+    done
+}
+
+install_echart () {
+    local module=echarts
+    emphasize "install echarts on host: ${BK_ECHARTS_IP_COMMA}"
+    for ip in ${BK_ECHARTS_IP[@]}; do
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "docker rm -f echart || echo container echart does not exist ;docker run -d --restart=always --net=host --name=echart docker-bkrepo.cwoa.net/ce1b09/weops-docker/ssr-echarts:latest"
+        reg_consul_svc echart 3000 "${ip}"
+    done
+}
+
+install_vault () {
+    local module=vault
+    emphasize "create database for vault"
+    mysql --login-path=mysql-default -e "CREATE DATABASE IF NOT EXISTS vault;"
+    emphasize "grant mysql privilege for vault"
+    ssh $BK_MYSQL_MASTER_IP "mysql --login-path=mysql-default -e \"GRANT ALL PRIVILEGES ON *.* TO 'root'@"${BK_VAULT_INIT_IP}" IDENTIFIED BY \"${BK_VAULT_MYSQL_PASSWORD}\";\""
+    emphasize "install vault init node on host: ${BK_VAULT_INIT_IP}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_VAULT_INIT_IP}" "${CTRL_DIR}/bin/install_weops_vault.sh -i true -s mysql-default.service.consul -p ${BK_MYSQL_ADMIN_PASSWORD} -P 3306 -u ${BK_MYSQL_ADMIN_USER}"
+    reg_consul_svc vault 8200 "${BK_VAULT_INIT_IP}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_VAULT_INIT_IP}" "cat /data/vault.secret" > /data/vault.secret
+    if [[ ! -f "${SELF_DIR}"/bin/04-final/vault.env ]]; then
+        echo VAULT_UNSEAL_CODE=$(cat /data/vault.secret|grep 'Unseal Key'|awk '{print $4}') > "${SELF_DIR}"/bin/04-final/vault.env
+        echo VAULT_ROOT_TOKEN=$(cat /data/vault.secret|grep 'Initial Root Token'|awk '{print $4}') >> "${SELF_DIR}"/bin/04-final/vault.env
+        emphasize "vault unseal code: $(cat /data/vault.secret|grep 'Unseal Key'|awk '{print $4}')"
+    fi
+    emphasize "install vault on host: ${BK_VAULT_IP_COMMA}"
+    for ip in ${BK_VAULT_IP[@]}; do
+        if [[ $ip == ${BK_VAULT_INIT_IP} ]]; then
+            emphasize "skip install vault on host: ${ip}"
+            continue
+        fi
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_vault.sh -i false -h mysql-default.service.consul -p ${BK_MYSQL_ADMIN_PASSWORD} -P 3306 -u ${BK_MYSQL_ADMIN_USER} -j ${BK_VAULT_INIT_IP}"
+        reg_consul_svc vault 8200 "${ip}"
+    done
+}
+
+install_automate () {
+    local module=automate
+    emphasize "install automate on host: ${BK_AUTOMATE_IP_COMMA}"
+    for ip in ${BK_AUTOMATE_IP[@]}; do
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_automate.sh -b ${ip} -w http://prometheus.service.consul/api/v1/write -u ${WEOPS_PROMETHEUS_USER} -s ${WEOPS_PROMETHEUS_PASSWORD} -r redis.service.consul -P 6379 -a ${BK_REDIS_ADMIN_PASSWORD} -v http://vault.service.consul:8200 -t ${VAULT_ROOT_TOKEN}"
+        reg_consul_svc automate 8089 "${ip}"
+    done
+}
+
+install_weopsproxy () {
+    local module=weopsproxy
+    emphasize "install weopsproxy on host: ${BK_WEOPSPROXY_IP_COMMA}"
+    for ip in ${BK_WEOPSPROXY_IP[@]}; do
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_proxy.sh -r http://${WEOPS_PROMETHEUS_USER}:${WEOPS_PROMETHEUS_PASSWORD}@prometheus.service.consul/api/v1/write -c 127.0.0.1:8501" 
+    done
+}
+
+install_weopsrdp () {
+    local module=weopsrdp
+    emphasize "install weopsrdp on host: ${BK_WEOPSRDP_IP_COMMA}"
+    for ip in ${BK_WEOPSRDP_IP[@]}; do
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_rdp.sh -s /o/ -I ${BK_PAAS_PUBLIC_URL}" 
+    done
+    emphasize "update consul kv"
+    consul kv put bkapps/upstreams/prod/views "[\"${BK_WEOPSRDP_IP0}:8082\",\"${BK_WEOPSRDP_IP1}:8082 backup\"]"
+    emphasize "reload nginx"
+    "${SELF_DIR}"/pcmd.sh -m nginx 'systemctl reload consul-template && /usr/local/openresty/nginx/sbin/nginx -s reload'
+}
+
+install_minio () {
+    local module=minio
+    emphasize "install minio on host: ${BK_MINIO_IP_COMMA}"
+    minio_server_list=""
+    for ip in "${BK_MINIO_IP[@]}"; do
+        minio_server_list+="http://$ip:9015/data "
+    done
+    minio_server_list=$(echo $minio_server_list | sed 's/ $//')
+    for ip in ${BK_MINIO_IP[@]}; do
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_minio.sh -a ${WEOPS_MINIO_ACCESS_KEY} -s ${WEOPS_MINIO_SECRET_KEY} -l \"${minio_server_list}\""
+        reg_consul_svc minio 9015 "${ip}"
+    done
+}
+
+install_casbinmesh () {
+    local module=casbinmesh
+    emphasize "install casbinmesh init node on host: ${BK_CASBINMESH_INIT_IP}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_CASBINMESH_INIT_IP}" "${CTRL_DIR}/bin/install_casbinmesh.sh -i -b ${BK_CASBINMESH_INIT_IP}"
+    emphasize "install casbinmesh on host: ${BK_CASBINMESH_IP_COMMA}"
+    for ip in ${BK_CASBINMESH_IP[@]}; do
+        if [[ $ip == ${BK_CASBINMESH_INIT_IP} ]]; then
+            emphasize "skip install casbinmesh on host: ${ip}"
+            continue
+        fi
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_casbinmesh.sh -j ${BK_CASBINMESH_INIT_IP} -b ${ip}"
+    done
+}
+
+install_trino () {
+    local module=trino
+    emphasize "install trino on host: ${BK_TRINO_IP_COMMA}"
+    for ip in ${BK_TRINO_IP[@]}; do
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_trino.sh -m \"mongodb://${BK_MONGODB_ADMIN_USER}:${BK_MONGODB_ADMIN_PASSWORD}@mongodb.service.consul:27017/admin?replicaSet=rs0\" -e http://es7.service.consul:9200 -eu elastic -ep ${BK_ES7_ADMIN_PASSWORD} -my jdbc:mysql://mysql-default.service.consul:3306 -mu root -mp ${BK_MYSQL_ADMIN_PASSWORD} -i http://influxdb.service.consul:8086 -iu admin -ip ${BK_INFLUXDB_ADMIN_PASSWORD}"
+        reg_consul_svc trino 8081 "${ip}"
+    done
+}
+
+install_datart () {
+    local module=datart
+    emphasize "install datart init node on host: ${BK_DATART_INIT_IP}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_DATART_INIT_IP}" "${CTRL_DIR}/bin/install_datart.sh -m \"jdbc:mysql://mysql-default.service.consul:3306/datart?&allowMultiQueries=true&characterEncoding=utf-8\" -u root -p \"${BK_MYSQL_ADMIN_PASSWORD}\" -d ${BK_DOMAIN} -i"
+    emphasize "install datart on host: ${BK_DATART_IP_COMMA}"
+    for ip in ${BK_DATART_IP[@]}; do
+        if [[ $ip == ${BK_DATART_INIT_IP} ]]; then
+            emphasize "skip install datart on host: ${ip}"
+            continue
+        fi
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_datart.sh -m \"jdbc:mysql://mysql-default.service.consul:3306/datart?&allowMultiQueries=true&characterEncoding=utf-8\" -u root -p \"${BK_MYSQL_ADMIN_PASSWORD}\" -d ${BK_DOMAIN}"
+        reg_consul_svc datart 8080 "${ip}"
+    done
+    emphasize "update consul kv"
+    consul kv put bkapps/upstreams/prod/datart "[\"${BK_DATART_IP0}:8080\",\"${BK_DATART_IP1}:8080\"]"
+    emphasize "sync static file to control"
+    if [[ -f /data/static.tgz ]]; then
+        emphasize "file already exists, skip"
+    else
+        rsync -avz $BK_DATART_INIT_IP:/tmp/static.tgz /data/
+    fi
+    emphasize "sync static file to paas"
+    tar -xf /data/static.tgz -C /data/src/open_paas/paas/
+    "${SELF_DIR}"/bkcli sync paas
+    "${SELF_DIR}"/bkcli restart paas
+}
+
+install_monstache () {
+    local module=monstache
+    emphasize "install monstache on host: ${BK_MONSTACHE_IP_COMMA}"
+    for ip in ${BK_MONSTACHE_IP[@]}; do
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_monstache.sh -p \"${BK_CMDB_MONGODB_PASSWORD}\" -e \"${BK_ES7_ADMIN_PASSWORD}\""
+    done
+}
+
+install_age () {
+    local module=age
+    emphasize "install age on host: ${BK_AGE_IP0}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_AGE_IP0}" "${CTRL_DIR}/bin/install_age.sh -u \"${WEOPS_AGE_DB_USER}\" -p \"${WEOPS_AGE_DB_PASSWORD}\" -d \"${WEOPS_AGE_DB_NAME}\""
+    reg_consul_svc age 5432 "${BK_AGE_IP0}"
+    emphasize "install age on host: ${BK_AGE_IP1}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_AGE_IP1}" "${CTRL_DIR}/bin/install_age.sh -u \"${WEOPS_AGE_DB_USER}\" -p \"${WEOPS_AGE_DB_PASSWORD}\" -d \"${WEOPS_AGE_DB_NAME}\""
+}
+
+install_kafkaadapter () {
+    local module=kafkaadapter
+    emphasize "install kafkaadapter on host: ${BK_KAFKAADAPTER_IP_COMMA}"
+    APP_AUTH_TOKEN=$(mysql --login-path=mysql-default -e "select auth_token from open_paas.paas_app where code='weops_saas';")
+    if [[ -z ${APP_AUTH_TOKEN} ]]; then
+        emphasize "get app auth token failed"
+        exit 1
+    else
+        for ip in ${BK_KAFKAADAPTER_IP[@]}; do
+            "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_kafka_adapter.sh -u \"${WEOPS_KAFKA_ADAPTER_USER}\" -p \"${WEOPS_KAFKA_ADAPTER_PASSWORD}\" -a \"${APP_AUTH_TOKEN}\""
+        reg_consul_svc kafkaadapter 8080 "${ip}"
+        done
+    fi
+}
+
+install_vector () {
+    local module=vector
+    emphasize "install vector on host: ${BK_VECTOR_IP_COMMA}"
+    for ip in ${BK_VECTOR_IP[@]}; do
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_vector.sh -u \"${WEOPS_PROMETHEUS_USER}\" -p \"${WEOPS_PROMETHEUS_PASSWORD}\" -w \"http://prometheus.service.consul/api/v1/write\""
+    done
+}
+
+all_install_docker () {
+    "${SELF_DIR}"/pcmd.sh -m all "${CTRL_DIR}/bin/install_docker_for_paasagent.sh"
 }
 
 module=${1:-null}
@@ -1379,6 +1589,54 @@ case $module in
         ;;
     mysql|redis_sentinel|redis)
         install_"${module}"_common "$@"
+        ;;
+    weopsconsul)
+        install_weopsconsul "$@"
+        ;;
+    prometheus)
+        install_prometheus "$@"
+        ;;
+    echart)
+        install_echart "$@"
+        ;;
+    vault)
+        install_vault "$@"
+        ;;
+    automate)
+        install_automate "$@"
+        ;;
+    weopsproxy)
+        install_weopsproxy "$@"
+        ;;
+    weopsrdp)
+        install_weopsrdp "$@"
+        ;;
+    minio)
+        install_minio "$@"
+        ;;
+    casbinmesh)
+        install_casbinmesh "$@"
+        ;;
+    trino)
+        install_trino "$@"
+        ;;
+    datart)
+        install_datart "$@"
+        ;;
+    monstache)
+        install_monstache "$@"
+        ;;
+    age)
+        install_age "$@"
+        ;;
+    kafkaadapter)
+        install_kafkaadapter "$@"
+        ;;
+    vector)
+        install_vector "$@"
+        ;;
+    docker)
+        all_install_docker "$@"
         ;;
     null) # 特殊逻辑，兼容source脚本
         ;;

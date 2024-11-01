@@ -415,6 +415,14 @@ get_service_status () {
     "${CTRL_DIR}"/bin/bks.sh "${service[@]}"
 }
 
+get_docker_service_status () {
+    local service=()
+    export FORCE_TTY=1
+    for p in "$@"; do  
+        docker ps -q -f name="${p}"
+    done
+}
+
 _sign_host_as_module () {
     # 参数, 标记本机安装的服务
     local name=$1

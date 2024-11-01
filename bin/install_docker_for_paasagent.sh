@@ -4,7 +4,10 @@ set -e
 
 SELF_DIR="$(dirname "$(readlink -f "$0")")"
 DOCKER_VERSION="20.10.23"
-
+warning () {
+    echo "$@" 1>&2
+    EXITCODE=$((EXITCODE + 1))
+}
 source ${SELF_DIR}/../load_env.sh
 
 if ! rpm -q install "docker-ce-$DOCKER_VERSION";then
@@ -16,6 +19,7 @@ cat <<EOF > /etc/docker/daemon.json
 {
     "data-root": "$BK_HOME/public/paas_agent/docker",
     "exec-opts": ["native.cgroupdriver=cgroupfs"],
+    "insecure-registries": ["repo.service.consul:8181"],
     "bridge": "none", 
     "iptables": false, 
     "ip-forward": true,
@@ -45,9 +49,13 @@ systemctl enable --now docker
 # 为了让blueking身份运行的paasagent也能运行docker cli命令。
 usermod -G docker blueking
 
-docker load < ${BK_PKG_SRC_PATH}/image/python27e_1.0.tar
-docker load < ${BK_PKG_SRC_PATH}/image/python36e_1.0.tar 
-
-# 同步工具
-rsync -avz ${BK_PKG_SRC_PATH}/image/runtool /usr/bin/
-chmod +x  /usr/bin/runtool
+if [[ -d  ${BK_PKG_SRC_PATH}/image ]];then
+    echo "load docker images"
+    docker load < ${BK_PKG_SRC_PATH}/image/python27e_1.0.tar
+    docker load < ${BK_PKG_SRC_PATH}/image/python36e_1.0.tar 
+    # 同步工具
+    rsync -avz ${BK_PKG_SRC_PATH}/image/runtool /usr/bin/
+    chmod +x  /usr/bin/runtool
+else
+    warning "docker images not found"
+fi
