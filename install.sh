@@ -1537,7 +1537,7 @@ install_age () {
 install_kafkaadapter () {
     local module=kafkaadapter
     emphasize "install kafkaadapter on host: ${BK_KAFKAADAPTER_IP_COMMA}"
-    APP_AUTH_TOKEN=$(mysql --login-path=mysql-default -e "select auth_token from open_paas.paas_app where code='weops_saas';")
+    APP_AUTH_TOKEN=$(mysql --login-path=mysql-default -eN "select auth_token from open_paas.paas_app where code='weops_saas';")
     if [[ -z ${APP_AUTH_TOKEN} ]]; then
         emphasize "get app auth token failed"
         exit 1
