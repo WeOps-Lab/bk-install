@@ -4,7 +4,7 @@ set -euo pipefail
 PROGRAM=$(basename "$0")
 EXITCODE=0
 
-source ../weops_version
+source /data/install/weops_version
 VERSION="1.0.0"
 
 usage () {

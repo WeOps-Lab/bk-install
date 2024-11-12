@@ -182,7 +182,8 @@ _install_mysql () {
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py  -s -P ${SELF_DIR}/bin/default/port.yaml)
     projects=${_projects["mysql"]}
     # 安装 mysql
-    count_master=$(cat install.config |grep mysql |grep master |wc -l)
+    # count_master=$(cat install.config |grep mysql |grep master |wc -l)
+    count_master=$(cat install.config | grep 'mysql(master)' |wc -l)
     if ! [ -z "${BK_MYSQL_SLAVE_IP_COMMA}" ];then
             if is_string_in_array "${BK_MYSQL_MASTER_IP_COMMA}" "${BK_MYSQL_SLAVE_IP[@]}";then
                     err "mysql(master) mysql(slave) 不可部署在同一台服务器"
@@ -192,7 +193,8 @@ _install_mysql () {
             echo "mysql(master)只能部署一个。"
             exit 1
     else
-            master_ip=`cat install.config | grep mysql | grep master | awk '{print $1}'`
+            # master_ip=`cat install.config | grep mysql | grep master | awk '{print $1}'`
+            master_ip=`cat install.config | grep 'mysql(master)' | awk '{print $1}'`
             if [ -n "$master_ip" ];then
                     mysql_ip=$BK_MYSQL_MASTER_IP0
             else
@@ -226,12 +228,12 @@ _install_mysql () {
     fi
 
     # 安装slave mysql
-    count_slave=$(cat install.config |grep mysql |grep slave |wc -l)
+    count_slave=$(cat install.config |grep 'mysql(slave)' |wc -l)
     if [ $count_slave -gt 2 ]; then
             echo "mysql(slave)最多支持部署2台。"
             exit 1
     else
-            mysql_slave_ip=$(cat install.config | grep mysql | grep slave | awk '{print $1}')
+            mysql_slave_ip=$(cat install.config | grep 'mysql(slave)' | awk '{print $1}')
             if [ -n "$mysql_slave_ip" ]; then
                     emphasize "install slave_mysql on host:"
                     for ip in ${mysql_slave_ip}; do
@@ -274,6 +276,10 @@ _install_redis () {
                 emphasize "register ${_project_consul["redis,default"]} on host $redis_ip"
                 reg_consul_svc "${_project_consul["redis,default"]}" "${_project_port["redis,default"]}" "${redis_ip}"
                 continue
+            else
+                emphasize "install redis slave on host: ${redis_ip}"
+                "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis.sh -n '${_project_name["redis,default"]}' -p '${_project_port["redis,default"]}' -a '${BK_REDIS_ADMIN_PASSWORD}' -b \$LAN_IP"
+                emphasize "dont register ${_project_consul["redis,default"]} slave on host $redis_ip"
             fi
             if ! grep "${redis_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep -v "CLUSTER" | grep "BK_REDIS_.*_IP_COMM" >/dev/null; then
                 "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis.sh -n '${_project_name["redis,default"]}' -p '${_project_port["redis,default"]}' -a '${BK_REDIS_ADMIN_PASSWORD}' -b \$LAN_IP"
@@ -1385,7 +1391,7 @@ install_echart () {
     local module=echarts
     emphasize "install echarts on host: ${BK_ECHARTS_IP_COMMA}"
     for ip in ${BK_ECHARTS_IP[@]}; do
-        "${SELF_DIR}"/pcmd.sh -H "${ip}" "docker rm -f echart || echo container echart does not exist ;docker run -d --restart=always --net=host --name=echart docker-bkrepo.cwoa.net/ce1b09/weops-docker/ssr-echarts:latest"
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "docker rm -f echart || echo container echart does not exist ;docker run -d --restart=always --net=host --name=repo.service.consul:8181/ssr-echarts:latest"
         reg_consul_svc echart 3000 "${ip}"
     done
 }
@@ -1395,7 +1401,7 @@ install_vault () {
     emphasize "create database for vault"
     mysql --login-path=mysql-default -e "CREATE DATABASE IF NOT EXISTS vault;"
     emphasize "grant mysql privilege for vault"
-    ssh $BK_MYSQL_MASTER_IP "mysql --login-path=mysql-default -e \"GRANT ALL PRIVILEGES ON *.* TO 'root'@"${BK_VAULT_INIT_IP}" IDENTIFIED BY \"${BK_VAULT_MYSQL_PASSWORD}\";\""
+    ssh $BK_MYSQL_MASTER_IP "mysql --login-path=default-root -e \"GRANT ALL PRIVILEGES ON *.* TO 'root'@\"${BK_VAULT_INIT_IP}\" IDENTIFIED BY \"${BK_MYSQL_ADMIN_PASSWORD}\";"
     emphasize "install vault init node on host: ${BK_VAULT_INIT_IP}"
     "${SELF_DIR}"/pcmd.sh -H "${BK_VAULT_INIT_IP}" "${CTRL_DIR}/bin/install_weops_vault.sh -i true -s mysql-default.service.consul -p ${BK_MYSQL_ADMIN_PASSWORD} -P 3306 -u ${BK_MYSQL_ADMIN_USER}"
     reg_consul_svc vault 8200 "${BK_VAULT_INIT_IP}"
@@ -1404,6 +1410,8 @@ install_vault () {
         echo VAULT_UNSEAL_CODE=$(cat /data/vault.secret|grep 'Unseal Key'|awk '{print $4}') > "${SELF_DIR}"/bin/04-final/vault.env
         echo VAULT_ROOT_TOKEN=$(cat /data/vault.secret|grep 'Initial Root Token'|awk '{print $4}') >> "${SELF_DIR}"/bin/04-final/vault.env
         emphasize "vault unseal code: $(cat /data/vault.secret|grep 'Unseal Key'|awk '{print $4}')"
+    else
+        emphasize "vault already init, skip."
     fi
     emphasize "install vault on host: ${BK_VAULT_IP_COMMA}"
     for ip in ${BK_VAULT_IP[@]}; do
@@ -1411,7 +1419,7 @@ install_vault () {
             emphasize "skip install vault on host: ${ip}"
             continue
         fi
-        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_vault.sh -i false -h mysql-default.service.consul -p ${BK_MYSQL_ADMIN_PASSWORD} -P 3306 -u ${BK_MYSQL_ADMIN_USER} -j ${BK_VAULT_INIT_IP}"
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_vault.sh -i false -s mysql-default.service.consul -p ${BK_MYSQL_ADMIN_PASSWORD} -P 3306 -u ${BK_MYSQL_ADMIN_USER}"
         reg_consul_svc vault 8200 "${ip}"
     done
 }
@@ -1462,14 +1470,14 @@ install_minio () {
 install_casbinmesh () {
     local module=casbinmesh
     emphasize "install casbinmesh init node on host: ${BK_CASBINMESH_INIT_IP}"
-    "${SELF_DIR}"/pcmd.sh -H "${BK_CASBINMESH_INIT_IP}" "${CTRL_DIR}/bin/install_casbinmesh.sh -i -b ${BK_CASBINMESH_INIT_IP}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_CASBINMESH_INIT_IP}" "${CTRL_DIR}/bin/install_casbin_mesh.sh -i -b ${BK_CASBINMESH_INIT_IP}"
     emphasize "install casbinmesh on host: ${BK_CASBINMESH_IP_COMMA}"
     for ip in ${BK_CASBINMESH_IP[@]}; do
         if [[ $ip == ${BK_CASBINMESH_INIT_IP} ]]; then
             emphasize "skip install casbinmesh on host: ${ip}"
             continue
         fi
-        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_casbinmesh.sh -j ${BK_CASBINMESH_INIT_IP} -b ${ip}"
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_casbin_mesh.sh -j ${BK_CASBINMESH_INIT_IP} -b ${ip}"
     done
 }
 

@@ -3,7 +3,7 @@
 PROGRAM=$(basename "$0")
 EXITCODE=0
 
-source ../weops_version
+source /data/install/weops_version
 # IMAGE="docker-bkrepo.cwoa.net/ce1b09/weops-docker/auto-mate:v1.0.21-fix6"
 
 VERSION="1.0.0"

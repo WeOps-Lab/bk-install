@@ -3,7 +3,7 @@
 PROGRAM=$(basename "$0")
 EXITCODE=0
 
-source ../weops_version
+source /data/install/weops_version
 # GUACD_IMAGE="docker-bkrepo.cwoa.net/ce1b09/weops-docker/guacd:latest"
 # WEOPSRDP_IMAGE="docker-bkrepo.cwoa.net/ce1b09/weops-docker/weopsrdp:latest"
 

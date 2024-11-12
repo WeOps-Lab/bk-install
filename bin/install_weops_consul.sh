@@ -2,7 +2,7 @@
 # 通用脚本框架变量
 PROGRAM=$(basename "$0")
 EXITCODE=0
-source ../weops_version
+source /data/install/weops_version
 #IMAGE="docker-bkrepo.cwoa.net/ce1b09/weops-docker/consul:latest"
 
 VERSION="1.0.0"
