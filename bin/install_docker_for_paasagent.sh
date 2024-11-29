@@ -3,7 +3,7 @@
 set -e
 
 SELF_DIR="$(dirname "$(readlink -f "$0")")"
-DOCKER_VERSION="20.10.23"
+DOCKER_VERSION="20.10.17"
 warning () {
     echo "$@" 1>&2
     EXITCODE=$((EXITCODE + 1))
@@ -51,8 +51,8 @@ usermod -G docker blueking
 
 if [[ -d  ${BK_PKG_SRC_PATH}/image ]];then
     echo "load docker images"
-    docker load < ${BK_PKG_SRC_PATH}/image/python27e_1.0.tar
-    docker load < ${BK_PKG_SRC_PATH}/image/python36e_1.0.tar 
+    docker load < ${BK_PKG_SRC_PATH}/image/python27e_1.1.tar
+    docker load < ${BK_PKG_SRC_PATH}/image/python36e_1.1.tar 
     # 同步工具
     rsync -avz ${BK_PKG_SRC_PATH}/image/runtool /usr/bin/
     chmod +x  /usr/bin/runtool

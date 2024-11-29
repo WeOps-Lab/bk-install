@@ -6,32 +6,81 @@ source "${SELF_DIR}"/load_env.sh
 source "${SELF_DIR}"/initdata.sh
 source "${SELF_DIR}"/tools.sh
 
+## 获取平台版本: 主版本.次版本
+PLAT_VER=$(cat "$BK_PKG_SRC_PATH"/VERSION | grep -oP '(\d+.\d+)' | tr -d "\n")
+
 set -e
+
+install_backup () {
+    ${SELF_DIR}/pcmd.sh -H $BK_MYSQL_IP0 "source ${SELF_DIR}/tools.sh;addcron_for_dbbackup_mysql"
+    ${SELF_DIR}/pcmd.sh -H $BK_MONGODB_IP0 "source ${SELF_DIR}/tools.sh;addcron_for_dbbackup_mongodb"
+    emphasize "为 蓝鲸部署备份定时一键备份,每天凌晨3点备份MYSQL，4点备份mongodb 备份路径为/data/bkbackup"
+    bash "${SELF_DIR}"/canway/backupTools/start_backup.sh
+    emphasize "为各蓝鲸机器配置清理日志策略"
+    ${SELF_DIR}/pcmd.sh -m all "bash ${SELF_DIR}/delete_log.sh"
+    #${SELF_DIR}/pcmd.sh -m all "echo '0 2 * * *  /usr/bin/find $INSTALL_PATH/logs/ -type f \( -name "*.log.*" -o -name "*.log" \) -mtime +15 -size +1c -delete' | crontab -;crontab -l"
+}
+
+install_cwlicense () {
+# 安装嘉为证书服务
+    local module=cwlicense
+    local port=${BK_CWLICENSE_PORT}
+    entcode=
+    if [[ -f ${BK_PKG_SRC_PATH}/ENTERPRISE ]];
+    then
+        entcode=$(cat ${BK_PKG_SRC_PATH}/ENTERPRISE)
+    else
+        red_echo "${BK_PKG_SRC_PATH}/ENTERPRISE 不存在，请检查"
+        exit 1
+    fi
+
+    # 挂载nfs
+    if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
+        emphasize "为 cwlicense 挂载 NFS 路径: $BK_NFS_IP0"
+        pcmdrc ${module} "_mount_shared_nfs cwlicense"
+    fi
+
+    emphasize "安装嘉为 cwlicense 许可服务: ${BK_CWLICENSE_IP_COMMA}"
+    ${SELF_DIR}/pcmd.sh -m ${module}  ${CTRL_DIR}/bin/install_cwlicense.sh -b \$LAN_IP -c ${entcode} -e "${CTRL_DIR}"/bin/04-final/cwlicense.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}
+
+    # 注册consul
+    emphasize "注册 cw-license 的 consul 服务: ${BK_CWLICENSE_IP_COMMA}:${BK_CWLICENSE_PORT} "
+    reg_consul_svc "cw-license" "${port}" "${BK_CWLICENSE_IP_COMMA}"
+
+
+
+    emphasize "添加主机模块标记"
+    pcmdrc ${module} "_sign_host_as_module ${module}"
+}
+
+install_iptables () {
+  ${SELF_DIR}/pcmd.sh -m all "bash ${SELF_DIR}/iptables.sh --start"
+  emphasize "为各蓝鲸机器配置清理防火墙策略，请注意，如后续进行扩容或迁移，请重新执行此命令。"
+}
 
 install_nfs () {
     emphasize "install nfs on host: ${BK_NFS_IP_COMMA}"
-    if [[ ! -z "${BK_NFS_IP_COMMA}" ]]; then
-        "${SELF_DIR}"/pcmd.sh -m nfs "${CTRL_DIR}/bin/install_nfs.sh -d ${INSTALL_PATH}/public/nfs"
-        emphasize "sign host as module"
-        pcmdrc "${BK_NFS_IP_COMMA}" "_sign_host_as_module nfs"
-    else
-        emphasize "no nfs host"
-    fi
-
+    "${SELF_DIR}"/pcmd.sh -m nfs "${CTRL_DIR}/bin/install_nfs.sh -d ${INSTALL_PATH}/public/nfs"
+    emphasize "sign host as module"
+    pcmdrc "${BK_NFS_IP_COMMA}" "_sign_host_as_module nfs"
 }
 
 install_yum () {
+
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
     local HTTP_PORT=${_project_port["yum,default"]}
     local PYTHON_PATH="/opt/py27/bin/python"
     [[ -d "${BK_YUM_PKG_PATH}"/repodata ]]  && rm -rf "'${BK_YUM_PKG_PATH}'/repodata"
-    emphasize "install bk yum on host: 中控机"
-    "${SELF_DIR}"/bin/install_yum.sh -P "${HTTP_PORT}" -p /opt/yum -python "${PYTHON_PATH}"
-    emphasize "add or update repo on host: ${ALL_IP_COMMA}"
-    "${SELF_DIR}"/pcmd.sh -m ALL "'${SELF_DIR}'/bin/setup_local_yum.sh -l http://$LAN_IP:${HTTP_PORT} -a"
+    if [[ $PLAT_VER < 4.0 ]]; then
+        emphasize "install bk yum on host: 中控机"
+        "${SELF_DIR}"/bin/install_yum.sh -P "${HTTP_PORT}" -p /opt/yum -python "${PYTHON_PATH}"
+        emphasize "add or update repo on host: ${ALL_IP_COMMA}"
+        "${SELF_DIR}"/pcmd.sh -m ALL "'${SELF_DIR}'/bin/setup_local_yum.sh -l http://$LAN_IP:${HTTP_PORT} -a"
+        emphasize "sign host as module"
+        pcmdrc "${LAN_IP}" "_sign_host_as_module yum"
+    fi
+
     "${SELF_DIR}"/pcmd.sh -m ALL "yum makecache"
-    emphasize "sign host as module"
-    pcmdrc "${LAN_IP}" "_sign_host_as_module yum"
     # special: 蓝鲸业务中控机模块标记
     pcmdrc "${LAN_IP}" "_sign_host_as_module controller_ip"
 }
@@ -42,7 +91,7 @@ install_beanstalk () {
     emphasize  "install beanstalk on host: ${BK_BEANSTALK_IP_COMMA}"
     ${SELF_DIR}/pcmd.sh -m beanstalk "yum install  -y beanstalkd && systemctl enable --now beanstalkd && systemctl start beanstalkd"
     # 注册consul
-    emphasize "register ${_project_port["$module,default"]}  consul server  on host: ${BK_BEANSTALK_IP_COMMA} "
+    emphasize "register ${_project_port["$module,default"]}  consul server  on host: ${BK_BEANSTALK_IP_COMMA}"
     reg_consul_svc "${_project_consul["$module,default"]}" "${_project_port["$module,default"]}" "${BK_BEANSTALK_IP_COMMA}"
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
@@ -69,6 +118,177 @@ install_consul () {
     pcmdrc consul "_sign_host_as_module ${module}"
 }
 
+install_vault () {
+    ## 由于插件路径绑定问题, vault 和 cwsm 模块角色一致.
+    local module=cwsm 
+    local VAULT_ENV=/etc/vault.d/vault.env
+
+    # SERVER_IP="${BK_CWSM_IP[@]}"
+    BK_VAULT_LEADER=${BK_CWSM_IP[0]}
+    ## 这里先判断是否已经存在集群主节点，否则默认取第一个ip为主节点。
+    for ip in ${BK_CWSM_IP[@]}; do
+        source <("${SELF_DIR}"/pcmd.sh -H $ip "cat $VAULT_ENV" | grep "=")
+        [[ -z $VAULT_TOKEN ]] && continue
+        master_ip=$(curl -s --connect-timeout 2 --header "X-Vault-Token: $VAULT_TOKEN" \
+            $VAULT_ADDR/v1/sys/ha-status | \
+            jq '.data.nodes[] | select(.active_node == true).api_address' | grep -oP '(?<=http://)([\d.]+)')
+        [[ -n $master_ip ]] && { BK_VAULT_LEADER=$master_ip; break; }
+    done
+    
+    set +e
+    BK_VAULT_FOLLOWER_IP=($(printf "%s\n" ${BK_CWSM_IP[@]}  | grep -vwE ""${BK_VAULT_LEADER// /|}"" ))
+    set -e
+    # 部署 vault leader server
+    emphasize "install vault server on host: ${BK_CWSM_IP_COMMA}"
+    # 这里拿第一个ip作为 leader 角色, 其它均为 follower 角色。
+    ## 仅在 leader 角色执行 初始化 和 生成解封密钥。
+    ## 其它 follower 角色 不用执行上述动作，直接加入集群即可。 
+    emphasize "install vault leader on host: ${BK_VAULT_LEADER}"
+    "${SELF_DIR}"/pcmd.sh -H $BK_VAULT_LEADER  "${CTRL_DIR}/bin/install_vault.sh  \
+                -s '$BK_CWSM_IP_COMMA' -r leader -b \$LAN_IP"
+    # 从leader角色获取解封密钥和token
+    set +e
+    source <("${SELF_DIR}"/pcmd.sh -H $BK_VAULT_LEADER "cat $VAULT_ENV" | grep "=")
+    set -e
+    if ! [[ -z "$BK_VAULT_FOLLOWER_IP" ]]; then
+        emphasize "install vault follower on host: ${BK_VAULT_FOLLOWER_IP[@]}"
+        "${SELF_DIR}"/pcmd.sh -H $(printf "%s," "${BK_VAULT_FOLLOWER_IP[@]}") "${CTRL_DIR}/bin/install_vault.sh \
+                -e '$VAULT_TOKEN' -u '$VAULT_UNSEAL_KEY' -s '$BK_CWSM_IP_COMMA' -r follower -b \$LAN_IP"
+    fi
+    # emphasize "sign host as module"
+    # pcmdrc consul "_sign_host_as_module ${module}"
+}
+
+
+install_cwsm () {
+    # 安装嘉为凭据服务
+    local module=cwsm
+    local port=${BK_CWSM_PORT}
+
+    emphasize "migrate ${module} sql"
+    migrate_sql $module
+    [[ $? -ne 0 ]] &&  err "导入sql失败,请检查" 
+
+    emphasize "安装嘉为凭据(cwsm)服务: ${BK_CWSM_IP_COMMA}"
+    ${SELF_DIR}/pcmd.sh -m ${module}  ${CTRL_DIR}/bin/install_cwsm.sh -b \$LAN_IP -e "${CTRL_DIR}"/bin/04-final/cwsm.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}
+    # 注册 cwsm consul
+    emphasize "注册 cwsm 的 consul 服务: ${BK_CWSM_IP_COMMA}:${BK_CWSM_PORT} "
+    reg_consul_svc "cwsm" "${port}" "${BK_CWSM_IP_COMMA}"
+
+    emphasize "添加saas白名单"
+    "${SELF_DIR}"/bin/add_skip_auth_appcode.sh ${module} mysql-paas
+
+    emphasize "添加主机模块标记"
+    pcmdrc ${module} "_sign_host_as_module ${module}"
+
+}
+
+install_doris() {
+    ## 安装doris 
+    local module=doris
+
+    # 同步java8安装包
+    emphasize "sync java8.tgz  to $module host: ${BK_DORIS_IP_COMMA}"
+    "${SELF_DIR}"/sync.sh "${module}" "${BK_PKG_SRC_PATH}/java8.tgz" "${BK_PKG_SRC_PATH}/"
+
+    # Doris服务器安装JAVA依赖
+    emphasize "install java on host: ${BK_DORIS_FE_IP_COMMA}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_DORIS_FE_IP_COMMA}" "${CTRL_DIR}/bin/install_java.sh -p '${INSTALL_PATH}' -f '${BK_PKG_SRC_PATH}'/java8.tgz"
+
+    # 部署 doris FE
+    emphasize "安装apache doris fe服务: ${BK_DORIS_FE_IP_COMMA}"
+    ${SELF_DIR}/pcmd.sh -H "${BK_DORIS_FE_IP_COMMA}"  ${CTRL_DIR}/bin/install_doris.sh -b \$LAN_IP \
+        -e "${CTRL_DIR}"/bin/04-final/doris.env -s ${BK_DORIS_FE_IP_COMMA} -p ${INSTALL_PATH} -r fe 
+    # 部署 doris BE
+    emphasize "安装apache doris be服务: ${BK_DORIS_BE_IP_COMMA}"
+    ${SELF_DIR}/pcmd.sh -H "${BK_DORIS_BE_IP_COMMA}" ${CTRL_DIR}/bin/install_doris.sh -b \$LAN_IP \
+        -e "${CTRL_DIR}"/bin/04-final/doris.env -s ${BK_DORIS_BE_IP_COMMA} -p ${INSTALL_PATH} -r be
+    # 初始化doris
+    _initdata_doris
+    # 如存在多个fe, 则添加为 FOLLOWER 角色
+    # 备注： 官方提供fe/be 增删 http api 还处于dev状态 2023/10/19
+    # 链接地址：https://doris.apache.org/docs/1.2/admin-manual/http-actions/fe/node-action/
+    #
+    # 获取当前各个角色ip
+    set +e
+    result=$(curl -s -u "root:$BK_DORIS_ADMIN_PASSWORD" http://${BK_DORIS_FE_IP}:$BK_DORIS_FE_HTTP_PORT/rest/v2/manager/node/node_list 2>/dev/null)
+    if [[ $(echo $result | jq .code) -ne 0 ]]; then
+        err "从ip:[$BK_DORIS_FE_IP]获取 doris 节点信息失败，请检查"
+    fi
+    fe_master_list=( $(curl -s -u "root:$BK_DORIS_ADMIN_PASSWORD" \
+        http://${BK_DORIS_FE_IP}:$BK_DORIS_FE_HTTP_PORT/rest/v2/manager/node/frontends | \
+        jq -r '.data.rows[] | select(.[8] == "true") | .[1]') )
+    doris_exist_fe=$(echo $result | jq -r '.data.frontend | join(" ")')
+    doris_exist_be=$(echo $result | jq -r '.data.backend | join(" ")')
+    set -e
+    ## 这里先判断是否已经存在FE集群主节点。
+    [[ -z $fe_master_list ]] && err "Doris FE主节点不存在, 请检查。"
+    # 将其它 doris FE 以follower身份加入 FE master
+    read -r fe_ip <<< "${BK_DORIS_FE_IP_COMMA//,/ }"
+    for ip in $fe_ip; do
+        if ! egrep "\<$ip\>" <<<$doris_exist_fe; then
+            "${SELF_DIR}"/pcmd.sh -H "$ip" "${CTRL_DIR}/bin/setup_doris_fe_rs.sh -m ${fe_master_list[0]} -p ${INSTALL_PATH} -a add"
+            echo "use information_schema; ALTER SYSTEM ADD FOLLOWER '$ip:$BK_DORIS_FE_EDIT_PORT';" | \
+                mysql -h"$BK_DORIS_FE_IP" -u"$BK_DORIS_ADMIN_USER" -P $BK_DORIS_FE_QUERY_PORT -p"$BK_DORIS_ADMIN_PASSWORD"
+            emphasize "成功添加doris FE follower host: $ip 到FE host:$BK_DORIS_FE_IP."
+        fi
+    done 
+    # 将 doris BE 信息加入到 FE
+    read -r be_ip <<< "${BK_DORIS_BE_IP_COMMA//,/ }"
+    for ip in $be_ip; do
+        if ! egrep "\<$ip\>" <<<$doris_exist_be; then
+            echo "use information_schema; ALTER SYSTEM ADD BACKEND '$ip:$BK_DORIS_BE_HEARTBEAT_PORT';" | \
+                mysql -h"$BK_DORIS_FE_IP" -u"$BK_DORIS_ADMIN_USER" -P $BK_DORIS_FE_QUERY_PORT -p"$BK_DORIS_ADMIN_PASSWORD"
+            emphasize "成功添加doris BE host: $ip 到FE host:$BK_DORIS_FE_IP."
+        fi
+    done 
+    # 注册 cwreport consul
+    emphasize "注册 doris fe 的 consul 服务: ${BK_DORIS_FE_IP_COMMA}:$BK_DORIS_FE_HTTP_PORT "
+    reg_consul_svc "doris-fe" "$BK_DORIS_FE_HTTP_PORT" "${BK_DORIS_FE_IP_COMMA}"
+    emphasize "注册 doris be 的 consul 服务: ${BK_DORIS_FE_IP_COMMA}:$BK_DORIS_BE_HEARTBEAT_PORT "
+    reg_consul_svc "doris-be" "$BK_DORIS_BE_HEARTBEAT_PORT" "${BK_DORIS_BE_IP_COMMA}"
+    emphasize "添加主机模块标记"
+    pcmdrc ${module} "_sign_host_as_module ${module}"
+
+}
+
+
+install_cwreport() {
+    ## 安装嘉为报表服务
+    local module=cwreport
+
+    # 同步java8安装包
+    emphasize "sync java8.tgz  to $module host: ${BK_CWREPORT_IP_COMMA}"
+    "${SELF_DIR}"/sync.sh "${module}" "${BK_PKG_SRC_PATH}/java8.tgz" "${BK_PKG_SRC_PATH}/"
+    # 报表服务安装JAVA依赖
+    emphasize "install java on host: ${BK_CWREPORT_IP_COMMA}"
+    "${SELF_DIR}"/pcmd.sh -m "${module}" "${CTRL_DIR}/bin/install_java.sh -p '${INSTALL_PATH}' -f '${BK_PKG_SRC_PATH}'/java8.tgz"
+    # 配置前端saas nginx配置
+    install_consul_template $module "${BK_CWREPORT_IP_COMMA}"
+    emphasize "安装嘉为报表服务: ${BK_CWREPORT_IP_COMMA}"
+    ${SELF_DIR}/pcmd.sh -m "${module}" ${CTRL_DIR}/bin/install_cwreport.sh -b \$LAN_IP \
+        -e "${CTRL_DIR}"/bin/04-final/cwreport.env -s "${BK_PKG_SRC_PATH}" -p ${INSTALL_PATH}
+    # 初始化 db数据
+    _initdata_cwreport
+    emphasize "grant rabbitmq private for ${module}"
+    grant_rabbitmq_pri $module
+    # 权限模型
+    emphasize "Registration authority model for ${module}"
+    bkiam_migrate ${module}
+    result=$(curl -s http://$BK_CWREPORT_IP:$BK_CWREPORT_SAAS_PORT/report/insight/api/service/insight/permission/init)
+    if  [[ $(echo $result | jq .code) -ne 0 ]]; then
+       warn "报表服务权限初始化失败,请稍后尝试" 
+    fi
+    # 注册 cwreport consul
+    emphasize "注册 cwreport 的 consul 服务: ${BK_CWREPORT_IP_COMMA}:${BK_CWREPORT_SAAS_PORT} "
+    reg_consul_svc "$module" "${BK_CWREPORT_SAAS_PORT}" "${BK_CWREPORT_IP_COMMA}"
+    emphasize "添加saas白名单"
+    "${SELF_DIR}"/bin/add_skip_auth_appcode.sh $BK_CWREPORT_APP_CODE mysql-paas
+    emphasize "添加主机模块标记"
+    pcmdrc ${module} "_sign_host_as_module ${module}"
+
+}
+
 install_pypi () {
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
     local module=pypi
@@ -87,13 +307,25 @@ install_pypi () {
     reg_consul_svc "${_project_consul["$module,default"]}" "${http_port}" "$LAN_IP"
 }
 
+_install_yq () {
+
+    local module=$1
+
+    if [[ "$module" == "controller" ]]; then
+         rsync -a "${CTRL_DIR}"/bin/yq /usr/local/bin/ && chmod +x /usr/local/bin/yq
+    else
+        "${SELF_DIR}"/pcmd.sh -m "$module" "rsync -a ${CTRL_DIR}/bin/yq /usr/local/bin/ && chmod +x /usr/local/bin/yq"
+    fi
+}
 install_controller () {
     emphasize "install controller source"
     local extar="$1"
     if [ -z "${extar}" ]; then
         "${CTRL_DIR}"/bin/install_controller.sh
+        _install_yq controller
     else
         "${CTRL_DIR}"/bin/install_controller.sh -e
+        _install_yq controller
     fi
 }
 
@@ -107,6 +339,7 @@ install_bkenv () {
                     license.env 
                     bkiam.env  
                     bkssm.env 
+                    bkapigw.env
                     bkauth.env
                     usermgr.env 
                     paasagent.env 
@@ -119,9 +352,11 @@ install_bkenv () {
                     bklog.env 
                     lesscode.env
                     fta.env
-                    bkiam_search_engine.env
-                    bkapigw.env)
-
+                    cwlicense.env
+                    cwsm.env
+                    doris.env
+                    cwreport.env
+                    bkiam_search_engine.env)
 
     # 生成bkrc
     set +e
@@ -141,9 +376,26 @@ install_bkenv () {
             "${SELF_DIR}"/bin/merge_env.sh "$module"
         fi
     done
+    # 修正因早期部署无法正常更新job证书密码的问题
+    if [[ -d $BK_CERT_PATH ]];then
+        gse_pass=$(awk '$1 == "gse_job_api_client.p12" {print $NF}' "$BK_CERT_PATH"/passwd.txt)
+        job_pass=$(awk '$1 == "job_server.p12" {print $NF}' "$BK_CERT_PATH"/passwd.txt)
+    else
+        source ~/.bkrc
+        gse_pass=$(awk '$1 == "gse_job_api_client.p12" {print $NF}' "$BK_PKG_SRC_PATH"/cert/passwd.txt)
+        job_pass=$(awk '$1 == "job_server.p12" {print $NF}' "$BK_PKG_SRC_PATH"/cert/passwd.txt)
+    fi
+    if [[ -z $gse_pass || -z $job_pass ]];then
+    sed -i.bak "s/BK_GSE_SSL_KEYSTORE_PASSWORD=.*/BK_GSE_SSL_KEYSTORE_PASSWORD=$gse_pass/g" "$SELF_DIR"/bin/01-generate/job.env
+    sed -i "s/BK_GSE_SSL_TRUSTSTORE_PASSWORD=.*/BK_GSE_SSL_TRUSTSTORE_PASSWORD=$gse_pass/g" "$SELF_DIR"/bin/01-generate/job.env
+    sed -i "s/BK_JOB_GATEWAY_SERVER_SSL_KEYSTORE_PASSWORD=.*/BK_JOB_GATEWAY_SERVER_SSL_KEYSTORE_PASSWORD=$job_pass/g" "$SELF_DIR"/bin/01-generate/job.env
+    sed -i "s/BK_JOB_GATEWAY_SERVER_SSL_TRUSTSTORE_PASSWORD=.*/BK_JOB_GATEWAY_SERVER_SSL_TRUSTSTORE_PASSWORD=$job_pass/g" "$SELF_DIR"/bin/01-generate/job.env
+    "${SELF_DIR}"/bin/merge_env.sh "job"
+    fi
 
     set -e
 }
+
 
 install_kafka () {
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
@@ -173,16 +425,65 @@ install_kafka () {
     pcmdrc ${module} "_sign_host_as_module ${module}"
 }
 
-install_mysql_common () {
-    _install_mysql $@
+install_tdsql () {
+    source <(/opt/py36/bin/python ${SELF_DIR}/qq.py  -s -P ${SELF_DIR}/bin/default/port.yaml)
+    projects=${_projects["mysql"]}
+    # 安装 tdsql
+    local mysql_ip=$BK_MYSQL_TDSQL_IP
+    #local BK_TDSQL_PATH=/data1/tdengine/data/4002/prod/mysql.sock
+    #port=${_project_port["mysql,default"]}
+    if ! grep "${mysql_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep "BK_MYSQL_TDSQL_.*_IP_COMMA" >/dev/null; then
+        # tdsql不安装，注释安装逻辑
+        #"${CTRL_DIR}"/pcmd.sh -H "${mysql_ip}" "${CTRL_DIR}/bin/install_mysql.sh -n 'default' -P ${_project_port["mysql,default"]} -p '$BK_MYSQL_ADMIN_PASSWORD' -d '${INSTALL_PATH}'/public/mysql -l '${INSTALL_PATH}'/logs/mysql -b \$LAN_IP -i"
+        # # mysql机器配置login-path
+        emphasize "set mysql login path 'default-root' on host: ${mysql_ip}"
+        # TODO: 使用pcmd时会出现意想不到的bug，可能和tty allocation有关，待定位，临时用原生ssh代替
+        #ssh "${mysql_ip}" "$CTRL_DIR/bin/setup_mysql_loginpath.sh -n 'default-root' -h '/var/run/mysql/default.mysql.socket' -u 'root' -p '$BK_MYSQL_ADMIN_PASSWORD'"
+        # mysql机器配置default-root快捷登录,tdsql不建议直连socket,需改为proxy 连接到15002，20240419
+        ssh "${mysql_ip}" "$CTRL_DIR/bin/setup_mysql_loginpath.sh -n 'default-root' -h "${mysql_ip}" -u '$BK_MYSQL_ADMIN_USER' -p '$BK_MYSQL_ADMIN_PASSWORD'" -P $port
+        for project in ${projects[@]}; do
+           target_ip=BK_MYSQL_${project^^}_IP_COMMA
+           port=${_project_port["mysql,default"]}
+           if [[ -z ${!target_ip} ]]; then
+               # 中控机配置login-path
+               emphasize "set mysql login path ${_project_consul["mysql,${project}"]} on host: 中控机"
+               "${SELF_DIR}"/bin/setup_mysql_loginpath.sh -n "${_project_consul["mysql,${project}"]}" -h "${mysql_ip}" -u "tdsqlpcloud" -p "$BK_MYSQL_ADMIN_PASSWORD" -P $port
+               # 配置mysql-模块consul解析
+               emphasize "register ${_project_consul["mysql,${project}"]} on host ${mysql_ip}"
+               reg_consul_svc "${_project_consul["mysql,${project}"]}" "${_project_port["mysql,${project}"]}" "${mysql_ip}"
+          fi
+        done
+        emphasize "register mysql consul on host: ${mysql_ip}"
+        # 配置mysql-default consul解析
+        reg_consul_svc "${_project_consul["mysql,default"]}" "${_project_port["mysql,default"]}" "${mysql_ip}"
+
+        # 中控机配置 default login-path
+        emphasize "set mysql ${_project_consul["mysql,default"]} login path on host: 中控机"
+        "${SELF_DIR}"/bin/setup_mysql_loginpath.sh -n "${_project_consul["mysql,default"]}" -h "${mysql_ip}" -u "$BK_MYSQL_ADMIN_USER" -p "$BK_MYSQL_ADMIN_PASSWORD" -P $port
+    fi
+    emphasize "sign host as module"
+    pcmdrc mysql "_sign_host_as_module mysql"
+}
+
+install_tdsql_common () {
+    _install_tdsql "$@"
     _initdata_mysql
+}
+
+install_mysql_common () {
+    _install_mysql "$@"
+    _initdata_mysql
+    # 由于需要配置只读，配置主从顺序换到initdata mysql授权之后，防止无法写入
+    mysql_slave_ip=$(cat install.config | grep mysql | grep slave |grep -v '#' | awk '{print $1}')
+    if [ -n "$mysql_slave_ip" ]; then
+    bash "${CTRL_DIR}"/configure_mysql_master-slave.sh
+    fi
 }
 
 _install_mysql () {
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py  -s -P ${SELF_DIR}/bin/default/port.yaml)
     projects=${_projects["mysql"]}
     # 安装 mysql
-    # count_master=$(cat install.config |grep mysql |grep master |wc -l)
     count_master=$(cat install.config | grep 'mysql(master)' |wc -l)
     if ! [ -z "${BK_MYSQL_SLAVE_IP_COMMA}" ];then
             if is_string_in_array "${BK_MYSQL_MASTER_IP_COMMA}" "${BK_MYSQL_SLAVE_IP[@]}";then
@@ -193,7 +494,6 @@ _install_mysql () {
             echo "mysql(master)只能部署一个。"
             exit 1
     else
-            # master_ip=`cat install.config | grep mysql | grep master | awk '{print $1}'`
             master_ip=`cat install.config | grep 'mysql(master)' | awk '{print $1}'`
             if [ -n "$master_ip" ];then
                     mysql_ip=$BK_MYSQL_MASTER_IP0
@@ -254,8 +554,6 @@ _install_mysql () {
                             echo "$ip"
                     done
                     pcmdrc mysql "_sign_host_as_module mysql_slave"
-                    # 配置主从
-                    bash ./configure_mysql_master-slave.sh
             fi
     fi
 }
@@ -290,6 +588,38 @@ _install_redis () {
     fi
     emphasize "sign host as module"
     pcmdrc redis "_sign_host_as_module redis"
+}
+
+install_redis_cluster () {
+    local project=$1
+    source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
+    PORT_LIST=($(sed 's/,/\ /g'<<< ${_project_port["redis_cluster,single"]}))
+
+    if [ -z  "${project}" ]; then
+        for redis_ip in "${BK_REDIS_CLUSTER_IP[@]}"; do
+            if grep "${redis_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep "CLUSTER" | grep "BK_REDIS_.*_IP_COMMA" >/dev/null; then
+                "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis_cluster.sh -n '${_project_name["redis_cluster,default"]}' -p '${_project_port["redis_cluster,default"]}' -a '${BK_REDIS_CLUSTER_ADMIN_PASSWORD}' -b \$LAN_IP"
+                emphasize "register ${_project_consul["redis_cluster,default"]} on host $redis_ip"
+                reg_consul_svc "${_project_consul["redis_cluster,default"]}" "${_project_port["redis_cluster,default"]}" "${redis_ip}"
+            fi
+        done
+    fi
+
+    emphasize "wait for the redis cluster node startup to complete"
+    wait_ns_alive redis-cluster.service.consul || fail "redis-cluster.service.consul 无法解析"
+
+    emphasize "create redis cluster on hosts: ${BK_REDIS_CLUSTER_IP[@]}"
+    "${CTRL_DIR}"/pcmd.sh -H "$BK_REDIS_CLUSTER_IP0" "echo yes | redis-cli -a $BK_REDIS_CLUSTER_ADMIN_PASSWORD --cluster create $(for host in ${BK_REDIS_CLUSTER_IP[@]}; do echo -n $host:${_project_port["redis_cluster,default"]}\ ; done)"
+
+    # 或者使用 redis-cli --cluster check 进行集群检查 redis-cli --cluster check -a $BK_REDIS_CLUSTER_ADMIN_PASSWORD $BK_REDIS_CLUSTER_IP0:${PORT_LIST[0] 
+    # 添加集群马上检查时，这时集群还是处于fail，需要等待一会集群状态才会变成ok
+    emphasize "Check the redis cluster status, please wait"
+    sleep 10
+    "${CTRL_DIR}"/pcmd.sh -H "$BK_REDIS_CLUSTER_IP0" "source ${CTRL_DIR}/functions; response=\$(redis-cli -a \"$BK_REDIS_CLUSTER_ADMIN_PASSWORD\" -h \"$BK_REDIS_CLUSTER_IP0\" -p \"${PORT_LIST[0]}\" cluster info | grep cluster_state | tr -d '[:space:]'); if [[ "\$response" != "cluster_state:ok" ]]; then err "当前集群状态: \$response"; else ok "当前集群状态: \$response"; fi"
+
+
+    emphasize "sign host as module"
+    pcmdrc redis_cluster "_sign_host_as_module redis_cluster"
 }
 
 install_rabbitmq () {
@@ -386,7 +716,7 @@ install_zk () {
     
     # 部署ZK
     emphasize "install zk on host: ${BK_ZK_IP_COMMA}"
-    "${SELF_DIR}"/pcmd.sh -m "${module}" "${CTRL_DIR}/bin/install_zookeeper.sh -j '${BK_ZK_IP_COMMA}' -b \$LAN_IP -n '${#BK_ZK_IP[@]}'"
+    "${SELF_DIR}"/pcmd.sh -m "${module}" "${CTRL_DIR}/bin/install_zookeeper.sh -l '${INSTALL_PATH}' -j '${BK_ZK_IP_COMMA}' -b \$LAN_IP -n '${#BK_ZK_IP[@]}'"
 
     # 注册consul
     emphasize "register  ${consul} consul server  on host: ${BK_ZK_IP_COMMA} "
@@ -466,7 +796,14 @@ install_es7 () {
 
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
+    # 加入es清理
+    if ! "${SELF_DIR}"/pcmd.sh -H "${BK_ES7_IP0}" "grep 'es_delete_expire' /var/spool/cron/root" >/dev/null 2>&1;then
+    "${SELF_DIR}"/pcmd.sh -H "${BK_ES7_IP0}" "echo '00 01 * * * $CTRL_DIR/bin/es_delete_expire_index.sh http://$BK_MONITOR_ES7_HOST:9200 paas_app_log- 30' >> /var/spool/cron/root"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_ES7_IP0}" "echo '01 01 * * * $CTRL_DIR/bin/es_delete_expire_index.sh http://$BK_MONITOR_ES7_HOST:9200 esb_api_log_community- 30'  >> /var/spool/cron/root"
+    emphasize "加入es索引清理计划,30天"
+    fi
 }
+
 
 install_influxdb () {
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
@@ -555,7 +892,7 @@ install_ssm () {
     for project in ${projects[@]}; do
         emphasize "install ${target_name}-${project} on host: ${BK_SSM_IP_COMMA}"
         "${SELF_DIR}"/pcmd.sh -H "${_project_ip["${target_name},${project}"]}" \
-                "${CTRL_DIR}/bin/install_bkssm.sh -e '${CTRL_DIR}/bin/04-final/bkssm.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
+                 "${CTRL_DIR}/bin/install_bkssm.sh -e '${CTRL_DIR}/bin/04-final/bkssm.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
         emphasize "register  ${consul} consul server  on host: ${BK_SSM_IP_COMMA}"
         reg_consul_svc "${_project_consul[${target_name},${project}]}"  "${_project_port[${target_name},${project}]}"  "${_project_ip[${target_name},${project}]}"
     done
@@ -573,15 +910,30 @@ install_auth () {
     emphasize "migrate $module sql"
     migrate_sql $module
     for project in ${projects[@]}; do
-        emphasize "install ${target_name}-${project} on host: ${BK_SSM_IP_COMMA}"
-        "${SELF_DIR}"/pcmd.sh -m $module \
-                "${CTRL_DIR}/bin/install_bkauth.sh -e '${CTRL_DIR}/bin/04-final/bkauth.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
+        emphasize "install ${target_name}-${project} on host: ${BK_AUTH_IP_COMMA}"
+        "${SELF_DIR}"/pcmd.sh -H "${_project_ip["${target_name},${project}"]}" \
+                 "${CTRL_DIR}/bin/install_bkauth.sh -e '${CTRL_DIR}/bin/04-final/bkauth.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
         emphasize "register  ${consul} consul server  on host: ${BK_AUTH_IP_COMMA}"
         reg_consul_svc "${_project_consul[${target_name},${project}]}"  "${_project_port[${target_name},${project}]}"  "${_project_ip[${target_name},${project}]}"
     done
 
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
+}
+
+install_monstache () {
+    local module=monstache
+    "${SELF_DIR}"/pcmd.sh -m cmdb "bash ${CTRL_DIR}/bin/install_monstache.sh"
+    log "渲染cmdb"
+    sed -i.bak 's/fullTextSearch: "off"/fullTextSearch: "on"/' $BK_PKG_SRC_PATH/cmdb/support-files/templates/server#conf#common.yaml
+    ./bkcli sync cmdb
+    ./bkcli render cmdb
+
+    log "重启cmdb"
+    ./bkcli restart cmdb
+
+    log "检查cmdb"
+    ./bkcli check cmdb
 }
 
 install_cmdb () {
@@ -611,7 +963,7 @@ _install_cmdb_project () {
         for project in ${project[@]}; do
             emphasize "install ${module}-${project} on host: $module"
             "${SELF_DIR}"/pcmd.sh -H "${_project_ip["${target_name},${project}"]}" \
-                    "${CTRL_DIR}/bin/install_cmdb.sh -e '${CTRL_DIR}/bin/04-final/cmdb.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -m '${project}'"
+                     "${CTRL_DIR}/bin/install_cmdb.sh -e '${CTRL_DIR}/bin/04-final/cmdb.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -m '${project}'"
         done
     fi
     emphasize "start bk-cmdb.target on host: ${module}"
@@ -625,7 +977,10 @@ _install_cmdb_project () {
             reg_consul_svc "${_project_consul[${target_name},${project}]}"  "${_project_port[${target_name},${project}]}"  "${_project_ip[${target_name},${project}]}"
         fi
     done
-
+    if [[ -n $BK_AUTH_IP_COMMA ]]; then
+        emphasize "sync open_paas data to bkauth"
+        sync_secret_to_bkauth
+    fi
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
 }
@@ -663,12 +1018,6 @@ _install_paas_project () {
         done
     done
 
-    # 挂载nfs
-    if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
-        emphasize "mount nfs to host: $BK_NFS_IP0"
-        pcmdrc ${module} "_mount_shared_nfs open_paas"
-    fi
-
     # 注册白名单
     emphasize "add or update appcode: $BK_PAAS_APP_CODE"
     add_or_update_appcode "$BK_PAAS_APP_CODE" "$BK_PAAS_APP_SECRET"
@@ -679,6 +1028,12 @@ _install_paas_project () {
     emphasize "Registration authority model for ${module}"
     bkiam_migrate $module
 
+    # 挂载nfs
+    if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
+        emphasize "mount nfs to host: $BK_NFS_IP0"
+        pcmdrc ${module} "_mount_shared_nfs open_paas"
+    fi
+
     # 版本信息
     _update_common_info
 
@@ -688,19 +1043,28 @@ _install_paas_project () {
 
 install_etcd () {
     local module=etcd
+    #local etcd_version=v3.5.4
+    source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
+
+    emphasize "sync cfssl&cfssljson commands to /usr/local/bin/"
+    #"${SELF_DIR}"/pcmd.sh -m ${module} "rsync -a ${BK_PKG_SRC_PATH}/etcd-${etcd_version}-linux-amd64/{etcd,etcdctl,etcdutl} /usr/local/bin/"
+    rsync -a "${CTRL_DIR}"/{cfssl,cfssljson} /usr/local/bin/ && chmod +x /usr/local/bin/{cfssljson,cfssl}
 
     # 生成 etcd 证书
-    "${SELF_DIR}"/pcmd.sh -m ${module} "${CTRL_DIR}/bin/gen_etcd_certs.sh -p ${INSTALL_PATH}/cert/etcd -i ${BK_ETCD_IP[@]}"
-    
-    emphasize "register consul ${module} on host: ${BK_ETCD_IP[@]}"
-    for ip in "${BK_ETCD_IP[@]}"; do
-        "${SELF_DIR}"/pcmd.sh -m ${module} "export ETCD_CERT_PATH=${INSTALL_PATH}/cert/etcd;export ETCD_DATA_DIR=${INSTALL_PATH}/public/etcd;export PROTOCOL=https;${CTRL_DIR}/bin/install_etcd.sh ${BK_ETCD_IP[@]}"
+    emphasize "generate etcd cert"
+    ${CTRL_DIR}/bin/gen_etcd_certs.sh -p "${INSTALL_PATH}"/cert/etcd -i "${BK_ETCD_IP[*]}" ; chown -R blueking.blueking "${INSTALL_PATH}"/cert/etcd
+    "${SELF_DIR}"/sync.sh ${module} "${INSTALL_PATH}"/cert/etcd "${INSTALL_PATH}"/cert/
+    "${SELF_DIR}"/sync.sh ${module} "$HOME"/.cfssl/ "$HOME"/
 
-        # 注册 consul
-        reg_consul_svc "$module" "2379" "$ip"
+    emphasize "install ${module} on host: ${BK_ETCD_IP[@]}"
+    "${SELF_DIR}"/pcmd.sh -m ${module} "export ETCD_CERT_PATH=${INSTALL_PATH}/cert/etcd;export ETCD_DATA_DIR=${INSTALL_PATH}/public/etcd;export PROTOCOL=https;${CTRL_DIR}/bin/install_etcd.sh ${BK_ETCD_IP[*]}"
+
+    # 注册 consul
+    for ip in "${BK_ETCD_IP[@]}"; do
+        emphasize "register consul ${module} on host: $ip"
+        reg_consul_svc "${_project_consul["${module},default"]}" "${_project_port["${module},default"]}" "$ip"
     done
 }
-
 install_apisix () {
     local module=apisix
     emphasize "install apix on host: apigw"
@@ -716,9 +1080,15 @@ install_apigw_fe () {
 
     emphasize "install apigw frontend on host: ${BK_NGINX_IP_COMMA}"
     PRSYNC_EXTRA_OPTS="--delete" "${SELF_DIR}"/sync.sh nginx "${BK_PKG_SRC_PATH}/${target_name}/dashboard-fe/" "${INSTALL_PATH}/bk_apigateway/dashboard-fe/"
-    "${SELF_DIR}"/pcmd.sh -m nginx "${CTRL_DIR}/bin/render_tpl -p ${INSTALL_PATH} -m ${target_name} -e ${CTRL_DIR}/bin/04-final/bkapigw.env ${BK_PKG_SRC_PATH}/bk_apigateway/support-files/templates/dashboard-fe#static#runtime#runtime.js ${BK_PKG_SRC_PATH}/bk_apigateway/support-files/templates/dashboard-fe#docs#static#runtime#runtime.js"
+    ## 兼容control机器部署nginx的情况
+    if [[ -d "${INSTALL_PATH}/bk_apigateway" ]]; then
+        /usr/bin/cp -rf ${BK_PKG_SRC_PATH}/${target_name}/dashboard-fe "${INSTALL_PATH}/bk_apigateway/"
+        chown -R blueking.blueking "${INSTALL_PATH}/bk_apigateway/"
+    fi
+    "${SELF_DIR}"/pcmd.sh -m nginx "${CTRL_DIR}/bin/render_tpl -p ${INSTALL_PATH} -m ${target_name} -e ${CTRL_DIR}/bin/04-final/bkapigw.env ${BK_PKG_SRC_PATH}/bk_apigateway/support-files/templates/dashboard-fe#static#runtime#runtime.js"
 
 }
+
 
 install_apigw () {
     local module=apigw
@@ -738,31 +1108,24 @@ install_apigw () {
     emphasize "sync and install python on host: ${BK_APIGW_IP_COMMA}"
     install_python $module
 
-    # 安装 etcd
-    install_etcd
-
-    for project in dashboard bk-esb operator apigateway; do
+    for project in dashboard bk-esb operator apigateway apigateway-core-api; do
         emphasize "register consul $project on host: ${ip}"
         reg_consul_svc ${_project_consul["${module},${project}"]} ${_project_port["${module},${project}"]} "${BK_APIGW_IP_COMMA}"
     done
 
     # 安装 apigw
-    for project in dashboard api-support bk-esb; do
-        project_port=${_project_port["${module},${project}"]}
-        project_consul=${_project_consul["${module},${project}"]}
-        for ip in "${BK_APIGW_IP_COMMA[@]}"; do 
-            emphasize "install ${module}(${project}) on host: ${ip}"
-            cost_time_attention
-            "${SELF_DIR}"/pcmd.sh -m ${module} "${CTRL_DIR}/bin/install_bkapigw.sh -b \$LAN_IP -m '$project' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' --cert-path '${INSTALL_PATH}/cert/etcd' -e '${CTRL_DIR}/bin/04-final/bkapigw.env'"
-        done
+    for ip in "${BK_APIGW_IP_COMMA[@]}"; do 
+        emphasize "install bk-apigateway on host: ${ip}"
+        cost_time_attention
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_bkapigw.sh -b \$LAN_IP -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' --cert-path '${INSTALL_PATH}/cert/etcd' -e '${CTRL_DIR}/bin/04-final/bkapigw.env'"
     done
-
 
     emphasize "add or update appocode ${BK_APIGW_APP_CODE}"
     add_or_update_appcode "$BK_APIGW_APP_CODE" "$BK_APIGW_APP_SECRET"
+    add_or_update_appcode bk_apigw_test "$BK_APIGW_TEST_APP_SECRET"
 
     emphasize "sign host as module"
-    pcmdrc ${module} "_sign_host_as_module ${module}"
+    pcmdrc ${module} "_sign_host_as_module apigateway"
 }
 
 install_python () {
@@ -835,11 +1198,13 @@ install_nginx () {
     install_consul_template ${module} "${BK_NGINX_IP_COMMA}"
 
     # 注册paas.service.consul cmdb.service.consul job.service.consul
-    if [[ $BK_HTTP_SCHEMA == 'http' ]]; then 
-        port=80
-    else
-        port=443
-    fi
+    #if [[ $BK_HTTP_SCHEMA == 'http' ]]; then 
+    #   port=80
+    #else
+    #    port=443
+    #fi
+    # 此处应为paas.service.consul的内网paas端口，支持自定义
+    port=${BK_PAAS_PRIVATE_ADDR##*:}
     for name in paas cmdb job; do
         emphasize "register consul service -> {${name}} on host ${BK_NGINX_IP_COMMA} "
         reg_consul_svc $name $port "${BK_NGINX_IP_COMMA}"
@@ -860,7 +1225,7 @@ install_appo () {
         fi
     fi
     emphasize "install docker on host: ${module}"
-    "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_docker_for_paasagent.sh"
+    "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_docker_for_paasagent.sh -v $PLAT_VER"
 
     emphasize "install ${module} on host: ${module}"
     cost_time_attention
@@ -870,15 +1235,15 @@ install_appo () {
     # 安装openresty
     emphasize "install openresty on host: ${BK_APPO_IP_COMMA}"
     "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_openresty.sh -p ${INSTALL_PATH} -d ${CTRL_DIR}/support-files/templates/nginx/"
+    
+    emphasize "install consul-template on host: ${BK_APPO_IP_COMMA}"
+    install_consul_template "paasagent" "${BK_APPO_IP_COMMA}"
 
     # nfs
     if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
         emphasize "mount nfs to host: $BK_NFS_IP0"
         pcmdrc ${module} "_mount_shared_nfs ${module}"
     fi
-    
-    emphasize "install consul-template on host: ${BK_APPO_IP_COMMA}"
-    install_consul_template "paasagent" "${BK_APPO_IP_COMMA}"
 
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
@@ -893,7 +1258,7 @@ install_appt () {
         err "appo appt 不可部署在同一台服务器"
     fi
     emphasize "install docker on host: ${module}"
-    "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_docker_for_paasagent.sh"
+    "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_docker_for_paasagent.sh -v $PLAT_VER"
 
     emphasize "install ${module} on host: ${module}"
     cost_time_attention
@@ -953,6 +1318,8 @@ _install_job_backend () {
     emphasize "migrate sql for module: ${module}"
     migrate_sql ${module}
 
+    emphasize "sync yq commands to /usr/local/bin/"
+    _install_yq ${module}
     # job依赖java环境
     ${SELF_DIR}/pcmd.sh -H ${BK_JOB_IP_COMMA} "if ! which java >/dev/null;then ${CTRL_DIR}/bin/install_java.sh -p ${INSTALL_PATH} -f ${BK_PKG_SRC_PATH}/java8.tgz;fi"
 
@@ -983,6 +1350,11 @@ _install_job_backend () {
         emphasize "mount nfs to host: ${BK_NFS_IP0}"
         pcmdrc job "_mount_shared_nfs job"
     fi
+	
+    if [[ -n $BK_AUTH_IP_COMMA ]]; then
+        emphasize "sync open_paas data to bkauth"
+        sync_secret_to_bkauth
+    fi
 
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
@@ -1005,7 +1377,7 @@ install_usermgr () {
         for ip in "${BK_USERMGR_IP[@]}"; do
             emphasize "install ${module} ${project} on host: ${BK_USERMGR_IP_COMMA} "
             "${SELF_DIR}"/pcmd.sh -H "${ip}" \
-                    "${CTRL_DIR}/bin/install_usermgr.sh -e ${CTRL_DIR}/bin/04-final/usermgr.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH} --python-path ${python_path}"
+                     "${CTRL_DIR}/bin/install_usermgr.sh -e ${CTRL_DIR}/bin/04-final/usermgr.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH} --python-path ${python_path}"
             reg_consul_svc "${_project_consul[${target_name},${project}]}" "${_project_port[${target_name},${project}]}" "${ip}"
         done
     done
@@ -1017,6 +1389,10 @@ install_usermgr () {
     # 注册权限模型
     bkiam_migrate ${module}
 
+    if [[ -n $BK_AUTH_IP_COMMA ]]; then
+        emphasize "sync open_paas data to bkauth"
+        sync_secret_to_bkauth
+    fi
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
 }
@@ -1030,26 +1406,33 @@ install_saas-t () {
 }
 
 install_saas () {
-    local env=${1:-appo}; shift 1
+    local env=${1:-appo}
+    local app_code=$2
+    local servers=${3:-$BK_APPO_IP_COMMA}
+    local app_version=$4
 
     source "${SELF_DIR}"/.rcmdrc
 
     if [ $# -ne 0 ]; then
-        for app_v in "$@"; do
-            app_code=${app_v%%=*}
-            app_version=${app_v##*=}
+        if [ "$app_version" == "" ]; then
+            emphasize "未指定版本号，默认部署最新版本"
+            pkg_name=$(_find_latest_one $app_code)
+        else
+            pkg_name=$(_find_saas ${app_code})
+        fi
 
-            if [ "$app_version" == "$app_v" ]; then
-                pkg_name=$(_find_latest_one $app_code)
-            else
-                # pkg_name=${app_code}_V${app_version}.tar.gz
-                pkg_name=$( _find_saas $app_code $app_version )
-            fi
+        if [ -z "$pkg_name" ];
+        then
+            fail "未找到 $app_code 对应的 S-mart 包，请检查 ${BK_PKG_SRC_PATH}/official_saas/ 下是否有对应的介质"
+        fi
 
-            _install_saas $env $app_code $pkg_name
-            assert " SaaS application $app_code has been deployed successfully" "Deploy saas $app_code failed."
-            #set_console_desktop ${app_code}
-        done
+        emphasize "开始部署 $app_code:"
+        emphasize "部署介质: $pkg_name"
+        emphasize "MD5 校验: $(md5sum ${BK_PKG_SRC_PATH}/official_saas/${pkg_name} |awk '{print $1}')"
+        emphasize "部署服务器: $servers"
+        _install_saas $env $app_code $pkg_name $servers
+        assert " SaaS  $app_code 部署成功" "SaaS $app_code 部署失败."
+        set_console_desktop ${app_code}
     else
         all_app=( $(_find_all_saas) )
         if [ ${#all_app[@]} -eq 0 ]; then
@@ -1057,24 +1440,107 @@ install_saas () {
         fi
 
         for app_code in $(_find_all_saas); do
-            _install_saas "$env" "$app_code" $(_find_latest_one "$app_code")
-            assert " SaaS application $app_code has been deployed successfully" "Deploy saas $app_code failed."
-            #set_console_desktop ${app_code}
+            emphasize "开始部署 $app_code:"
+            emphasize "部署介质: $pkg_name"
+            emphasize "MD5 校验: $(md5sum ${BK_PKG_SRC_PATH}/official_saas/${pkg_name} |awk '{print $1}')"
+            emphasize "部署服务器: $servers"
+            _install_saas "$env" "$app_code" $(_find_latest_one "$app_code") $servers
+            assert " SaaS  $app_code 部署成功" "SaaS $app_code 部署失败."
+            if [[ -n $BK_AUTH_IP_COMMA ]]; then
+                emphasize "sync open_paas data to bkauth"
+                sync_secret_to_bkauth
+            fi
+            set_console_desktop ${app_code}
         done
     fi
 }
+
 
 _install_saas () {
     local app_env=$1
     local app_code=$2
     local pkg_name=$3
+    local app_servers=$4
 
-    if [ -f "$BK_PKG_SRC_PATH"/official_saas/"$pkg_name" ]; then
-        step " Deploy official saas $app_code"
-        /opt/py36/bin/python "${SELF_DIR}"/bin/saas.py -e "$app_env" -n "$app_code" -k "$BK_PKG_SRC_PATH"/official_saas/"$pkg_name" -f "$CTRL_DIR"/bin/04-final/paas.env
+
+
+    # 解包，导入 SaaS 中的 deploy/
+    if [ -f "$BK_PKG_SRC_PATH"/official_saas/"$pkg_name" ];
+    then
+        # 是否带 deploy/ 目录
+        if tar -tf "$BK_PKG_SRC_PATH"/official_saas/"$pkg_name" |grep  "${app_code}/deploy/env.yml" > /dev/null ;
+        then
+            step "存在 deploy/ 目录，开始导入 SaaS 环境变量"
+
+            tar xf "$BK_PKG_SRC_PATH"/official_saas/"$pkg_name" -C /tmp/ ${app_code}/app.yml ${app_code}/deploy/
+
+            log "导出备份当前变量"
+            /opt/py36/bin/python ${CTRL_DIR}/bin/add_saas_env/main.py \
+                -a /tmp/${app_code}/app.yml \
+                -e /tmp/${app_code}/deploy/env.yml \
+                -p ${CTRL_DIR}/bin/01-generate,${CTRL_DIR}/bin/02-dynamic,${CTRL_DIR}/bin/04-final,${CTRL_DIR}/bin/05-canway \
+                --export-only
+
+            log "导入 deploy/ 中定义的变量"
+            /opt/py36/bin/python ${CTRL_DIR}/bin/add_saas_env/main.py \
+                -a /tmp/${app_code}/app.yml \
+                -e /tmp/${app_code}/deploy/env.yml \
+                -p ${CTRL_DIR}/bin/01-generate,${CTRL_DIR}/bin/02-dynamic,${CTRL_DIR}/bin/04-final,${CTRL_DIR}/bin/05-canway
+        fi
+
+
+        # 不需要判断版本，按目录顺序，文件名顺序进行执行 sql 即可
+        # 导入 SQL
+        # 按目录名正序
+        set +e
+        if [ -d "/tmp/${app_code}/deploy/sql/" ];
+        then
+            for sqlDir in $(ls -trh /tmp/${app_code}/deploy/sql/ | awk '{print $NF}' |sort -k1.1n);
+            do
+                # 按文件名正序
+                for sql in $(ls -trh /tmp/${app_code}/deploy/sql/${sqlDir}/ |sort -k1.1n);
+                do
+                    # 判断是否有导入
+                    if [ ! -f ~/.migrate/${app_code}_${sqlDir}_${sql} ];
+                    then
+                        log "开始导入 ${sqlDir}/${sql}"
+                        if mysql --login-path=mysql-paas < /tmp/${app_code}/deploy/sql/${sqlDir}/${sql} >/dev/null;
+                        then 
+                            touch ~/.migrate/${app_code}_${sqlDir}_${sql}
+                            log "导入成功"
+                        else
+                            err "导入失败"
+                        fi
+                    else
+                        log  "$(green_echo '[跳过]') ${sqlDir}/${sql} 曾经导入过。"
+                    fi
+                done
+            done
+        fi
+        set -e
+        # ^导入 SQL
+
     else
-        err "no package found for saas app: $app_code"
+        err "未找到 $BK_PKG_SRC_PATH"/official_saas/"$pkg_name, 请确认包是否存在"
     fi
+    # ^deploy/ 处理
+
+    if [[ "$app_code" != "" ]];
+    then
+        # 清理部署时产生的临时文件
+        rm -rf /tmp/${app_code}/
+    fi
+
+    step "添加应用白名单"
+    _add_saas_skip_auth $app_code
+
+    step "开始部署 SaaS $app_code"
+    /opt/py36/bin/python "${SELF_DIR}"/bin/saas.py \
+        -e "$app_env" \
+        -n "$app_code" \
+        -k "$BK_PKG_SRC_PATH"/official_saas/"$pkg_name" \
+        -f "$CTRL_DIR"/bin/04-final/paas.env \
+        -s $app_servers
 }
 
 install_bkmonitorv3 () {
@@ -1123,17 +1589,37 @@ _install_bkmonitor () {
 
     done
 
+    ## 处理监控平台兼容gse 1.0
+    tmp_gv=$(echo $gse_version | grep -oP '(\d+.)' | tr -d "\n")
+    if [[ $tmp_gv < 2.0 ]]; then
+        mysql -h $BK_MONITOR_MYSQL_HOST -u $BK_MONITOR_MYSQL_USER -p$BK_MONITOR_MYSQL_PASSWORD -P $BK_MONITOR_MYSQL_PORT -e \
+            "update bkmonitorv3_alert.global_setting set value='false' where \`key\`='USE_GSE_AGENT_STATUS_NEW_API' and value='true';"
+    fi
+
+    if [[ -n $BK_AUTH_IP_COMMA ]]; then
+        emphasize "sync open_paas data to bkauth"
+        sync_secret_to_bkauth
+    fi
 }
 
 install_paas_plugins () {
     local module=paas_plugins
     local python_path=/opt/py27/bin/python
-
     emphasize "sync java11 on host: ${BK_PAAS_IP_COMMA}"
     "${SELF_DIR}"/sync.sh "paas" "${BK_PKG_SRC_PATH}/java11.tgz" "${BK_PKG_SRC_PATH}/"
 
     emphasize "install java11 on host: ${BK_PAAS_IP_COMMA}"
     "${SELF_DIR}"/pcmd.sh -m "paas" "mkdir ${INSTALL_PATH}/jvm/;tar -xf ${BK_PKG_SRC_PATH}/java11.tgz --strip-component=1 -C ${INSTALL_PATH}/jvm/"
+ 
+    if [[ -n $BK_APIGW_IP_COMMA ]]; then
+        emphasize "sync java11 on host: ${BK_APIGW_IP_COMMA}"
+        "${SELF_DIR}"/sync.sh "apigw" "${BK_PKG_SRC_PATH}/java11.tgz" "${BK_PKG_SRC_PATH}/"
+        emphasize "install java11 on host: ${BK_APIGW_IP_COMMA}"
+        "${SELF_DIR}"/pcmd.sh -m "apigw" "mkdir ${INSTALL_PATH}/jvm/;tar -xf ${BK_PKG_SRC_PATH}/java11.tgz --strip-component=1 -C ${INSTALL_PATH}/jvm/"
+        emphasize "install log_agent on host: ${BK_APIGW_IP_COMMA}"
+        "${SELF_DIR}"/pcmd.sh -m "apigw" "${CTRL_DIR}/bin/install_paas_plugins.sh -m apigw  --python-path ${python_path} -e ${CTRL_DIR}/bin/04-final/paas_plugins.env \
+               -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}"
+    fi
 
     emphasize "install log_agent,log_parser on host: ${BK_PAAS_IP_COMMA}"
     "${SELF_DIR}"/pcmd.sh -m "paas" "${CTRL_DIR}/bin/install_paas_plugins.sh -m paas --python-path ${python_path} -e ${CTRL_DIR}/bin/04-final/paas_plugins.env \
@@ -1147,6 +1633,9 @@ install_paas_plugins () {
         emphasize "install log_agent on host: ${BK_APPO_IP_COMMA}"
         "${SELF_DIR}"/pcmd.sh -m "appo" "${CTRL_DIR}/bin/install_paas_plugins.sh -m appo -a appo --python-path ${python_path} -e ${CTRL_DIR}/bin/04-final/paas_plugins.env  -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}"
     fi
+    # 注册 app_code，消缺2024.2.7，app_code与数据库不一致导致监控告警发送失败，提示不匹配
+    emphasize "add or update appcode: bk_paas_log_alert"
+    add_or_update_appcode bk_paas_log_alert "$BK_PAAS_APP_SECRET"
 }
 
 install_nodeman () {
@@ -1178,6 +1667,24 @@ install_nodeman () {
     emphasize "Registration authority model for ${module}"
     bkiam_migrate ${module}
 
+    ## 更新加密工具
+    encrytool=${CTRL_DIR}/support-files/tools/encrypted_tools/linux_$(uname -i)/encryptedpasswd
+    encrytool_destdir="${INSTALL_PATH}/bknodeman/nodeman/script_tools/encrypted_tools/linux_$(uname -i)/"
+    chmod +x $encrytool
+    ## 兼容3.x平台部署
+    if [[ $PLAT_VER < 4.0 ]]; then
+        :
+    else
+        "${SELF_DIR}"/sync.sh "${module}" "${encrytool}" "${encrytool_destdir}"
+        ## 兼容control机器部署nodeman的情况
+        if [[ -d "${encrytool_destdir}" ]]; then
+            /usr/bin/cp -rf "${encrytool}" "${encrytool_destdir}"
+        fi
+    fi
+
+    ## consul 注册WAN_IP,WAN_IP先临时获取为LAN_IP
+    consul kv put bkcfg/global/nodeman_wan_ip $LAN_IP
+
     # 安装openresty
     emphasize "install openresty on host: ${module}"
     "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_openresty.sh -p ${INSTALL_PATH} -d ${CTRL_DIR}/support-files/templates/nginx/"
@@ -1191,10 +1698,14 @@ install_nodeman () {
 
     # nfs
     if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
-        emphasize "mount nfs to host: ${BK_NFS_IP0}"
+        emphasize "mount nfs to host: $BK_NFS_IP0"
         pcmdrc ${module} "_mount_shared_nfs bknodeman"
     fi
 
+    if [[ -n $BK_AUTH_IP_COMMA ]]; then
+        emphasize "sync open_paas data to bkauth"
+        sync_secret_to_bkauth
+    fi
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
     pcmdrc ${module} "_sign_host_as_module consul-template"
@@ -1208,6 +1719,7 @@ install_gse () {
 _install_gse_project () {
     local module=gse
     local project=$1
+    local gse_version=$(_get_version gse)
     local target_name=$(map_module_name $module)
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -p ${BK_PKG_SRC_PATH}/${target_name}/projects.yaml -P ${SELF_DIR}/bin/default/port.yaml)
     emphasize "add or update appcode: $BK_GSE_APP_CODE"
@@ -1232,6 +1744,16 @@ _install_gse_project () {
 
     # 启动
     "${SELF_DIR}"/pcmd.sh -m ${module} "systemctl start bk-gse.target"
+    if [[ -n $BK_AUTH_IP_COMMA ]]; then
+        emphasize "sync open_paas data to bkauth"
+        sync_secret_to_bkauth
+    fi
+    ## gse 1.0不需要往apigw注册
+    tmp_gv=$(echo $gse_version | grep -oP '(\d+.)' | tr -d "\n")
+    if [[ $tmp_gv > 2.0 ]]; then
+        emphasize "init apigateway data"
+        "${SELF_DIR}"/pcmd.sh -H "$BK_APPO_IP0" "${CTRL_DIR}/bin/init_gse_apigw_data.sh  -c $BK_GSE_APP_CODE -s $BK_GSE_APP_SECRET -v $gse_version -l http://apigw-apigateway.service.consul:6006"
+    fi
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
 }
@@ -1264,6 +1786,9 @@ install_bklog () {
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -p ${BK_PKG_SRC_PATH}/${target_name}/projects.yaml -P ${SELF_DIR}/bin/default/port.yaml)
     projects=${_projects[${module}]}
 
+    emphasize "grant rabbitmq private for ${target_name}"
+    grant_rabbitmq_pri $target_name
+
     # 初始化sql
     emphasize "migrate sql for ${module}"
     migrate_sql $module 
@@ -1290,6 +1815,10 @@ install_bklog () {
     	    pcmdrc "${ip}" "_sign_host_as_module bk${module}-${project}"
         done
     done
+    if [[ -n $BK_AUTH_IP_COMMA ]]; then
+        emphasize "sync open_paas data to bkauth"
+        sync_secret_to_bkauth
+    fi
 }
 
 install_dbcheck () {
@@ -1337,9 +1866,9 @@ install_lesscode () {
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
     pcmdrc nginx "_sign_host_as_module consul-template"
-    
+
     emphasize "set bk_lesscode as desktop display by default"
-    #set_console_desktop "bk_lesscode"
+    set_console_desktop "bk_lesscode"
 }
 
 install_bkapi () {
@@ -1391,19 +1920,19 @@ install_echart () {
     local module=echarts
     emphasize "install echarts on host: ${BK_ECHARTS_IP_COMMA}"
     for ip in ${BK_ECHARTS_IP[@]}; do
-        "${SELF_DIR}"/pcmd.sh -H "${ip}" "docker rm -f echart || echo container echart does not exist ;docker run -d --restart=always --net=host --name=repo.service.consul:8181/ssr-echarts:latest"
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "docker rm -f echart || echo container echart does not exist ;docker run -d --restart=always --net=host --name=echart repo.service.consul:8181/ssr-echarts:latest"
         reg_consul_svc echart 3000 "${ip}"
     done
 }
 
-install_vault () {
+install_weops_vault () {
     local module=vault
     emphasize "create database for vault"
     mysql --login-path=mysql-default -e "CREATE DATABASE IF NOT EXISTS vault;"
     emphasize "grant mysql privilege for vault"
-    ssh $BK_MYSQL_MASTER_IP "mysql --login-path=default-root -e \"GRANT ALL PRIVILEGES ON *.* TO 'root'@\"${BK_VAULT_INIT_IP}\" IDENTIFIED BY \"${BK_MYSQL_ADMIN_PASSWORD}\";"
+    ssh ${BK_MYSQL_MASTER_IP} "mysql --login-path=default-root -e \"GRANT ALL PRIVILEGES ON *.* TO 'root'@'${BK_VAULT_INIT_IP}' IDENTIFIED BY '${BK_MYSQL_ADMIN_PASSWORD}';\""
     emphasize "install vault init node on host: ${BK_VAULT_INIT_IP}"
-    "${SELF_DIR}"/pcmd.sh -H "${BK_VAULT_INIT_IP}" "${CTRL_DIR}/bin/install_weops_vault.sh -i true -s mysql-default.service.consul -p ${BK_MYSQL_ADMIN_PASSWORD} -P 3306 -u ${BK_MYSQL_ADMIN_USER}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_VAULT_INIT_IP}" "${CTRL_DIR}/bin/install_weops_vault.sh -i -s mysql-default.service.consul -p ${BK_MYSQL_ADMIN_PASSWORD} -P 3306 -u ${BK_MYSQL_ADMIN_USER}"
     reg_consul_svc vault 8200 "${BK_VAULT_INIT_IP}"
     "${SELF_DIR}"/pcmd.sh -H "${BK_VAULT_INIT_IP}" "cat /data/vault.secret" > /data/vault.secret
     if [[ ! -f "${SELF_DIR}"/bin/04-final/vault.env ]]; then
@@ -1445,7 +1974,7 @@ install_weopsrdp () {
     local module=weopsrdp
     emphasize "install weopsrdp on host: ${BK_WEOPSRDP_IP_COMMA}"
     for ip in ${BK_WEOPSRDP_IP[@]}; do
-        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_rdp.sh -s /o/ -I ${BK_PAAS_PUBLIC_URL}" 
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weopsrdp.sh -s /o/ -I ${BK_PAAS_PUBLIC_URL}" 
     done
     emphasize "update consul kv"
     consul kv put bkapps/upstreams/prod/views "[\"${BK_WEOPSRDP_IP0}:8082\",\"${BK_WEOPSRDP_IP1}:8082 backup\"]"
@@ -1517,7 +2046,7 @@ install_datart () {
     "${SELF_DIR}"/bkcli restart paas
 }
 
-install_monstache () {
+install_weops_monstache () {
     local module=monstache
     emphasize "install monstache on host: ${BK_MONSTACHE_IP_COMMA}"
     for ip in ${BK_MONSTACHE_IP[@]}; do
@@ -1560,6 +2089,7 @@ install_vector () {
 all_install_docker () {
     "${SELF_DIR}"/pcmd.sh -m all "${CTRL_DIR}/bin/install_docker_for_paasagent.sh"
 }
+
 
 module=${1:-null}
 shift $(($# >= 1 ? 1 : 0))
@@ -1608,7 +2138,7 @@ case $module in
         install_echart "$@"
         ;;
     vault)
-        install_vault "$@"
+        install_weops_vault "$@"
         ;;
     automate)
         install_automate "$@"

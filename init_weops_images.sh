@@ -1,5 +1,8 @@
 #!/bin/bash
 # 部署regestry
+source /data/install/tools.sh
+source /data/install/functions.sh
+reg_consul_svc repo 8181 $LAN_IP
 if [[ ! -d /data/registry ]];then
     mkdir -p /data/registry
 fi
@@ -19,7 +22,7 @@ EOF
 fi
 
 if [[ ! $(docker ps -a|grep registry) ]];then
-    docker run -d --net=host --restart=always --name registry -v /opt/registry.conf:/etc/docker/registry/config.yml:ro -v /data/registry:/data/registry docker-bkrepo.cwoa.net/ce1b09/weops-docker/registry:latest
+    docker run -d --net=host --restart=always --name registry -v /opt/registry.conf:/etc/docker/registry/config.yml:ro -v /data/registry:/data/registry docker-bkrepo.cwoa.net/ce1b09/weops-docker/registry:latest-arm
 fi
 
 images=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^docker-bkrepo.cwoa.net/ce1b09/weops-docker/")

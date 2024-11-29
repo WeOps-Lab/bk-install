@@ -93,6 +93,6 @@ docker run --net=host -itd \
     -e POSTGRES_USER=$POSTGRES_USER \
     -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
     -e POSTGRES_DB=$POSTGRES_DB \
-    -v ./data:/data/postgres \
+    -v /data/weops/age/data:/data/postgres \
     --restart=always \
     $AGE_IMAGE

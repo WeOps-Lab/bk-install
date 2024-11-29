@@ -177,7 +177,7 @@ case $module in
         target_name=${module#bk}
         pcmdrc "${target_name}" "get_service_status ${SERVICE[${target_name}]}"
         ;;
-    weopsconsul|weopsproxy|kafkaadapter|trino|datart|minio|prometheus|vault|automate|age|monstache|casbinmesh|vector|weopsrdp)
+    weopsconsul|weopsproxy|kafkaadapter|trino|datart|minio|prometheus|vault|automate|age|monstache|casbinmesh|vector|weopsrdp|echart)
         pcmdrc "${module}" "get_docker_service_status ${SERVICE[${module}]}"
         ;;
     bknodeman|nodeman)
@@ -251,6 +251,10 @@ case $module in
             done
 
         fi
+        ;;
+    mysql)
+            pcmdrc "mysql" "get_service_status ${SERVICE[mysql]}"
+            bash ./check_master-slave.sh
         ;;
     *)  
         if [[ -z ${SERVICE[$module]} ]]; then

@@ -419,7 +419,14 @@ get_docker_service_status () {
     local service=()
     export FORCE_TTY=1
     for p in "$@"; do  
-        docker ps -q -f name="${p}"
+        containers=$(docker ps -q -f name="${p}")
+        # echo "containers: ${containers}"
+        alive_count=$(docker ps -q -f name="${p}" | wc -l)
+        if [ "${alive_count}" -eq 1 ]; then
+            echo -e "\033[32mservice ${p} is running. containers: ${containers}\033[0m"
+        else
+            echo -e "\033[31mservice ${p} is not running\033[0m"
+        fi       
     done
 }
 

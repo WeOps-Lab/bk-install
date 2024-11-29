@@ -108,12 +108,12 @@ fi
 docker run -d --restart=always --net=host \
 -v /data/vault/config/vault.hcl:/etc/vault.hcl \
 --name=vault \
-docker-bkrepo.cwoa.net/ce1b09/weops-docker/vault server -config=/etc/vault.hcl
+$VAULT_IMAGE server -config=/etc/vault.hcl
 
 if [[ "$INIT" == true ]]; then
     # wait for vault online
     sleep 30
     log "init vault"
-    docker exec vault sh -c "export VAULT_ADDR=http://127.0.0.1:8200 vault operator init || echo 'vault already init' && exit 0"
+    docker exec vault sh -c "export VAULT_ADDR=http://127.0.0.1:8200 vault operator init || echo 'vault already init'" && exit 0
     docker exec vault sh -c "export VAULT_ADDR=http://127.0.0.1:8200 && vault operator init -key-shares=1 -key-threshold=1" > /data/vault.secret
 fi
