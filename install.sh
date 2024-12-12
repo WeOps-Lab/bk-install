@@ -1445,7 +1445,7 @@ install_weopsrdp () {
     local module=weopsrdp
     emphasize "install weopsrdp on host: ${BK_WEOPSRDP_IP_COMMA}"
     for ip in ${BK_WEOPSRDP_IP[@]}; do
-        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_rdp.sh -s /o/ -I ${BK_PAAS_PUBLIC_URL}" 
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_rdp.sh -I /o/ -s ${BK_PAAS_PUBLIC_URL}" 
     done
     emphasize "update consul kv"
     consul kv put bkapps/upstreams/prod/views "[\"${BK_WEOPSRDP_IP0}:8082\",\"${BK_WEOPSRDP_IP1}:8082 backup\"]"
