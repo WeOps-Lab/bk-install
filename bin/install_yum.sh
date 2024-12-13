@@ -113,7 +113,7 @@ if [[ $EXITCODE -ne 0 ]]; then
 fi
 
 # 开始安装
-yum install -y createrepo || error "yum install craeterepo failed!"
+# yum install -y createrepo || error "yum install craeterepo failed!"
 
 chmod 755 -R "${PREFIX}"
 
@@ -137,7 +137,8 @@ EOF
 
 systemctl enable bk-yum.service --now
 
-if ! createrepo "$PREFIX"; then
+cd /opt/yum || exit 1
+if ! dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz; then
     echo "createrepo $PREFIX failed"
     exit 1
 fi

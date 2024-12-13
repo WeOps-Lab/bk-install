@@ -7,7 +7,7 @@ SELF_DIR=$(dirname "$(readlink -f "$0")")
 . $SELF_DIR/../load_env.sh
 
 gse_zk_addr="$BK_GSE_ZK_ADDR"
-zkbin=/opt/zookeeper/bin/zkCli.sh
+zkbin="docker exec -i zookeeper bin/zkCli.sh"
 bk_biz_id=2 # 《蓝鲸》业务id，默认为2
 
 if [[ -z "$gse_zk_addr" ]]; then

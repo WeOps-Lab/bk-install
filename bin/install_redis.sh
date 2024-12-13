@@ -8,7 +8,7 @@ set -euo pipefail
 PROGRAM=$(basename "$0")
 VERSION=1.0
 EXITCODE=0
-
+source /data/install/weops_version
 # 全局默认变量
 REDIS_VERSION="5.0.9"
 BIND_ADDR="127.0.0.1"
@@ -112,11 +112,11 @@ if (( EXITCODE > 0 )); then
     usage_and_exit "$EXITCODE"
 fi
 
-# 安装redis
-if ! rpm -ql redis &>/dev/null; then
-    log "yum install redis-${REDIS_VERSION}"
-    yum -q -y install redis-${REDIS_VERSION}
-fi
+# # 安装redis
+# if ! rpm -ql redis &>/dev/null; then
+#     log "yum install redis-${REDIS_VERSION}"
+#     yum -q -y install redis-${REDIS_VERSION}
+# fi
 
 # 检查系统内核参数
 # 允许内核超量使用内存，防止低内存时无法fork的风险。
@@ -133,6 +133,7 @@ if [[ $tcp_backlog -lt 512 ]]; then
     	sysctl net.core.somaxconn=512
 fi
 
+install -m 755 -o 999 -g 999 -d /etc/redis
 # 生成 redis 配置文件
 CONF_NAME=${NAME}.conf
 log "生成 /etc/redis/$CONF_NAME 配置文件"
@@ -179,21 +180,53 @@ aof-rewrite-incremental-fsync yes
 maxmemory-policy volatile-lru
 EOF
 
-chown redis.redis /etc/redis/"${CONF_NAME}"
+chown 999:999 /etc/redis/"${CONF_NAME}"
 
 # 创建dir目录
-install -m 755 -o redis -g redis -d ${DATA_DIR}/${NAME}
+install -m 755 -o 999 -g 999 -d ${DATA_DIR}/${NAME} ${LOG_DIR}
+
+if docker ps -a | awk '{print $NF}' | grep -wq "redis-${NAME}"; then
+  log "检测到已存在的redis-${NAME},删除"
+  docker rm -f redis-${NAME}
+fi
 
 log "启动Redis实例 redis@${NAME}"
-systemctl start redis@"${NAME}"
+docker run -d --name redis-${NAME} \
+    -v /etc/redis:/etc/redis \
+    -v ${DATA_DIR}/${NAME}:${DATA_DIR}/${NAME} \
+    -v ${LOG_DIR}:${LOG_DIR} \
+    --net=host \
+    --health-cmd "redis-cli -h ${BIND_ADDR} -p ${PORT} -a ${PASSWORD} ping" \
+    $REDIS_IMAGE redis-server /etc/redis/${NAME}.conf
 
-log "检查redis@${NAME} 状态"
-if ! systemctl status redis@"${NAME}"; then
-    log "请检查启动日志，使用命令：journalctl -u redis@${NAME} 查看失败原因"
-    log "手动修复后，使用命令：systemctl start redis@${NAME} 启动并确认是否启动成功"
-    log "启动成功后，使用命令：systemctl enable redis@${NAME} 设置开机启动"
-    exit 100
-else
-    log "设置Redis实例 redis@${NAME} 开机启动"
-    systemctl enable redis@"${NAME}"
-fi
+while true; do
+    # 获取容器健康状态
+    STATUS=$(docker inspect --format='{{.State.Health.Status}}' "redis-${NAME}")
+    
+    # 判断状态
+    if [[ "${STATUS}" == "healthy" ]]; then
+        echo "Redis container 'redis-${NAME}' is healthy and ready to use!"
+        break
+    elif [[ "${STATUS}" == "unhealthy" ]]; then
+        error "Warning: Redis container 'redis-${NAME}' is unhealthy."
+        exit 1
+    else
+        echo "Current status: ${STATUS}. Waiting..."
+    fi
+    
+    # 等待5秒后重新检查
+    sleep 5
+done
+
+# systemctl start redis@"${NAME}"
+
+# log "检查redis@${NAME} 状态"
+# if ! systemctl status redis@"${NAME}"; then
+#     log "请检查启动日志，使用命令：journalctl -u redis@${NAME} 查看失败原因"
+#     log "手动修复后，使用命令：systemctl start redis@${NAME} 启动并确认是否启动成功"
+#     log "启动成功后，使用命令：systemctl enable redis@${NAME} 设置开机启动"
+#     exit 100
+# else
+#     log "设置Redis实例 redis@${NAME} 开机启动"
+#     systemctl enable redis@"${NAME}"
+# fi

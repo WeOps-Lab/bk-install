@@ -114,8 +114,8 @@ done
 LOG_DIR=${LOG_DIR:-$PREFIX/logs/paasagent}
 
 # 安装rpm依赖包，如果不存在
-if ! rpm -q "${RPM_DEP[@]}" >/dev/null; then
-    yum -y install "${RPM_DEP[@]}"
+if ! dpkg -l "${RPM_DEP[@]}" >/dev/null; then
+    apt -y install "${RPM_DEP[@]}"
 fi
 
 # 参数合法性有效性校验，这些可以使用通用函数校验。

@@ -191,7 +191,7 @@ pcmdrc () {
     local target=$1
     shift 1
     local content=$@
-    local str="source \${CTRL_DIR}/action.rc;source \${CTRL_DIR}/tools.sh;${content[@]}"
+    local str="source ~/.bkrc;source \${CTRL_DIR}/action.rc;source \${CTRL_DIR}/tools.sh;${content[@]}"
     # 根据传入的第一个参数判断pcmd的参数为-m 还是-H
     if [[ $target =~ [0-9]\. ]]; then
         ${CTRL_DIR}/pcmd.sh -H  ${target} "$str"
@@ -263,7 +263,7 @@ wait_return_code () {
 _mount_shared_nfs () {
     local module=$1
         set -e
-        yum -y install nfs-utils
+        apt -y install nfs-common
         case $module in
             open_paas)
                 local name=$(date +%s)

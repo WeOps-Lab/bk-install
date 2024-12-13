@@ -12,7 +12,7 @@ EXITCODE=0
 
 # 全局默认变量
 PREFIX=/data/bkee
-OPENRESTY_VERSION=1.22.0
+OPENRESTY_VERSION=1.27.1.1-1~jammy1
 
 usage () {
     cat <<EOF
@@ -87,7 +87,8 @@ if [[ $EXITCODE -ne 0 ]]; then
 fi
 
 # 安装openresty 如果未安装过
-yum -y install openresty-${OPENRESTY_VERSION}
+# yum -y install openresty-${OPENRESTY_VERSION}
+apt install -y openresty=${OPENRESTY_VERSION}
 
 # 配置openresty符合蓝鲸需要
 install -d /usr/local/openresty/nginx/conf/conf.d

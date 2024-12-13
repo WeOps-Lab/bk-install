@@ -8,7 +8,7 @@
 PROGRAM=$(basename "$0")
 VERSION=1.0
 EXITCODE=0
-
+source /data/install/weops_version
 # 全局默认变量
 MONGODB_VERSION="4.2.3"
 BIND_ADDR="127.0.0.1"
@@ -49,6 +49,24 @@ warning () {
 
 version () {
     echo "$PROGRAM version $VERSION"
+}
+
+check_port_alive () {
+    local port=$1
+
+    lsof -i:$port -sTCP:LISTEN 1>/dev/null 2>&1
+
+    return $?
+}
+wait_port_alive () {
+    local port=$1
+    local timeout=${2:-10}
+
+    for i in $(seq $timeout); do
+        check_port_alive $port && return 0
+        sleep 1
+    done
+    return 1
 }
 
 # 解析命令行参数，长短混合模式
@@ -98,11 +116,11 @@ if [[ $EXITCODE -ne 0 ]]; then
 fi
 
 # 安装 mongodb
-if ! rpm -ql mongodb-org-"$MONGODB_VERSION" &>/dev/null; then
-    yum install -y mongodb-org-"$MONGODB_VERSION" mongodb-org-server-"$MONGODB_VERSION" \
-        mongodb-org-shell-"$MONGODB_VERSION" mongodb-org-mongos-"$MONGODB_VERSION" \
-        mongodb-org-tools-"$MONGODB_VERSION" || error "安装mongodb-$MONGODB_VERSION 失败"
-fi
+# if ! rpm -ql mongodb-org-"$MONGODB_VERSION" &>/dev/null; then
+#     yum install -y mongodb-org-"$MONGODB_VERSION" mongodb-org-server-"$MONGODB_VERSION" \
+#         mongodb-org-shell-"$MONGODB_VERSION" mongodb-org-mongos-"$MONGODB_VERSION" \
+#         mongodb-org-tools-"$MONGODB_VERSION" || error "安装mongodb-$MONGODB_VERSION 失败"
+# fi
 
 # 判断并创建目录
 if ! [[ -d $DATA_DIR ]]; then
@@ -111,33 +129,53 @@ fi
 if ! [[ -d $LOG_DIR ]]; then
     mkdir -p "$LOG_DIR"
 fi
-chown mongod.mongod "$DATA_DIR" "$LOG_DIR"
+chown 999:999 "$DATA_DIR" "$LOG_DIR" "/var/run/mongodb"
 
 # 修改mongodb配置
-log "修改mongodb主配置文件 /etc/mongod.conf"
+log "生成mongodb主配置文件 /etc/mongod.conf"
+cat <<EOF > /etc/mongod.conf
+# mongod.conf
+# for documentation of all options, see:
+#   http://docs.mongodb.org/manual/reference/configuration-options/
+# where to write logging data.
+systemLog:
+  destination: file
+  logAppend: true
+  logRotate: reopen
+  path: /data/bkce/logs/mongodb/mongod.log
+# Where and how to store data.
+storage:
+  dbPath: /data/bkce/public/mongodb
+  journal:
+    enabled: true
+  wiredTiger:
+    engineConfig:
+      cacheSizeGB: 4
+#  wiredTiger:
+# how the process runs
+processManagement:
+  fork: false  # fork and run in background
+  pidFilePath: /var/run/mongodb/mongod.pid  # location of pidfile
+  timeZoneInfo: /usr/share/zoneinfo
+# network interfaces
+net:
+  port: 27017
+  bindIp: 127.0.0.1, ${BIND_ADDR}
+#security:
+#operationProfiling:
+#replication:
+#sharding:
+## Enterprise-Only Options
+#auditLog:
+#snmp:
+replication:
+  replSetName: rs0
+security:
+  keyFile: /etc/mongod.key
+EOF
 
-# 如果监听ip不是localhost才需要修改配置
-if ! [[ $BIND_ADDR = "127.0.0.1" || $BIND_ADDR = "localhost" ]]; then
-    sed -i "/bindIp/s/127.0.0.1/127.0.0.1, $BIND_ADDR/" /etc/mongod.conf
-fi
-
-# 修改wiredTiger默认内存大小为4G
-if ! grep -q "cacheSizeGB: 4" "/etc/mongod.conf"; then
-    log "限制mongodb的wiredTiger内存 /etc/mongod.conf"
-    sed -i "s@\#  engine:@  wiredTiger:\n    engineConfig:\n      cacheSizeGB: 4@" /etc/mongod.conf
-else
-    echo "WiredTiger cache size has been set to 4."
-fi
-
-# 增加logrotate参数为reopen
-sed -i '/logRotate/d' /etc/mongod.conf 
-sed -i '/logAppend/a\  logRotate: reopen' /etc/mongod.conf
-
-sed -i "/  dbPath/s,/var/lib/mongo,$DATA_DIR," /etc/mongod.conf
-sed -i "/  path:/s,/var/log/mongodb,$LOG_DIR," /etc/mongod.conf
-sed -i "/  port:/s,27017,$CLIENT_PORT," /etc/mongod.conf
-# 如果单机混搭多实例mongodb时，建议配置下面选项
-# sed -i -e '/wiredTiger:/ s/^#//' -e '/wiredTiger:/a\    engineConfig:\n      cacheSizeGB: 1' /etc/mongod.conf
+log "生成mongodb key文件 /etc/mongod.key"
+touch /etc/mongod.key
 
 # 配置系统的logrotate
 cat <<EOF > /etc/logrotate.d/mongodb
@@ -156,6 +194,28 @@ $LOG_DIR/*.log {
 }
 EOF
 
-log "启动mongod，并设置开机启动mongod"
-systemctl enable --now mongod
-systemctl status mongod
+if docker ps -a | awk '{print $NF}' | grep -wq "mongo"; then
+  log "检测到已存在的mongo,删除"
+  docker rm -f mongo
+fi
+
+# 启动mongodb
+docker run -d \
+    --name mongo \
+    --net=host \
+    -v /etc/mongod.conf:/etc/mongod.conf \
+    -v /etc/mongod.key:/etc/mongod.key \
+    -v $DATA_DIR:$DATA_DIR \
+    -v $LOG_DIR:$LOG_DIR \
+    -v /tmp:/tmp \
+    -v /var/run/mongodb:/var/run/mongodb \
+    $MONGODB_IMAGE -f /etc/mongod.conf
+
+# 等待27017端口启动
+log "等待mongodb启动"
+wait_port_alive CLIENT_PORT 10
+log "mongodb启动成功"
+
+# log "启动mongod，并设置开机启动mongod"
+# systemctl enable --now mongod
+# systemctl status mongod

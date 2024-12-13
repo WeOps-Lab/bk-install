@@ -8,7 +8,7 @@ VERSION=1.0
 EXITCODE=0
 
 # 全局默认变量
-ES_VERSION="7.17.17"
+ES_VERSION="7.17.26"
 BIND_ADDR="127.0.0.1"
 ES_REST_PORT="9200"
 ES_TRANSPORT_PORT="9300"
@@ -136,11 +136,11 @@ if (( EXITCODE > 0 )); then
 fi
 
 # 安装
-if ! rpm -q elasticsearch &>/dev/null; then
-    log "yum install elasticsearch-${ES_VERSION}"
+if ! dpkg -l elasticsearch &>/dev/null; then
+    log "apt install elasticsearch-${ES_VERSION}"
     unset JAVA_HOME
-    yum -q -y install elasticsearch-"${ES_VERSION}" || error "elsticsearch7 安装失败"
-    if ! rpm -q elasticsearch-"${ES_VERSION}" &>/dev/null;then
+    apt -y install elasticsearch="${ES_VERSION}" || error "elsticsearch7 安装失败"
+    if ! dpkg -l elasticsearch | grep -q "${ES_VERSION}" &>/dev/null;then
         error "elasticsearch7 安装失败"
     fi
 fi
@@ -255,6 +255,8 @@ fi
 
 # 启动es
 log "启动elasticsearch"
+sed -i '/Service/a LimitMEMLOCK=infinity' /lib/systemd/system/elasticsearch.service
+systemctl daemon-reload
 systemctl start elasticsearch.service
 
 log "检查elasticsearch 状态"

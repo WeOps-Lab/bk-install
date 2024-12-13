@@ -147,6 +147,7 @@ if ! [ -z "${module}" ];then
     tmp=${arrayname}[@]
     # 封装pssh，并在登录后先加载目标机器上的load_env.sh
     pssh $PARALLEL -t "$TIMEOUT" -h <(printf "%s\n" "${!tmp}") -i -x "-T" -I <<EOF
+source ~/.bkrc
 source ${SELF_DIR}/load_env.sh
 ${COMM[@]}
 EOF
@@ -156,6 +157,7 @@ else
     tmp=( ${HOST_STRING//,/ } )
     # 封装pssh，并在登录后先加载目标机器上的load_env.sh
     pssh $PARALLEL -t "$TIMEOUT" -h <(printf "%s\n" "${tmp[@]}") -i -x "-T" -I <<EOF
+source ~/.bkrc
 source ${SELF_DIR}/load_env.sh
 ${COMM[@]}
 EOF

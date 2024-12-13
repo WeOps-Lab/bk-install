@@ -13,3 +13,21 @@ MINIO_IMAGE="repo.service.consul:8181/minio:latest"
 DATART_IMAGE="repo.service.consul:8181/datart:latest"
 CASBIN_IMAGE="repo.service.consul:8181/casbinmesh:latest"
 AUTOMATE_IMAGE="repo.service.consul:8181/auto-mate:v1.0.21-fix6"
+
+# 蓝鲸平台组件环境变量
+INFLUXDB_IMAGE="repo.service.consul:8181/influxdb:1.7.11"
+ZOOKEEPER_IMAGE="repo.service.consul:8181/zookeeper:3.7.2"
+KAFKA_IMAGE="repo.service.consul:8181/kafka:0.10.2.0"
+MYSQL_IMAGE="repo.service.consul:8181/mysql:5.7.44"
+REDIS_IMAGE="repo.service.consul:8181/redis:5.0.14"
+NGINX_IMAGE="repo.service.consul:8181/openresty:1.27"
+MONGODB_IMAGE="repo.service.consul:8181/mongo:4.2.24"
+RABBITMQ_IMAGE="repo.service.consul:8181/rabbitmq:3.10.25"
+RABBITMQ_MANAGE_IMAGE="repo.service.consul:8181/rabbitmq:3.10.25-management"
+REDIS_SENTINEL_IMAGE="repo.service.consul:8181/redis-sentinel:5.0.14"
+ES7_IMAGE="repo.service.consul:8181/elasticsearch:7.17.26"
+
+BKMONITORV3_IMAGE="repo.service.consul:8181/bkmonitorv3:v3.6.3656"
+NODEMAN_IMAGE="repo.service.consul:8181/nodeman:bknodeman:v2.3.1"
+
+DOCKER_VERSION="5:20.10.24~3-0~ubuntu-jammy"

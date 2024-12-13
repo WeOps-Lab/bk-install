@@ -68,10 +68,13 @@ while (( $# > 0 )); do
     shift 
 done 
 
-if ! rpm -q consul-template >/dev/null;then
-    yum install -y consul-template
-fi
+# if ! rpm -q consul-template >/dev/null;then
+#     yum install -y consul-template
+# fi
 
+if ! dpkg -l consul-template >/dev/null;then
+    apt install -y consul-template
+fi
 
 if ! [ -z $MODULE ];then
     if [[ $MODULE == 'nginx' ]];then

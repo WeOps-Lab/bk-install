@@ -10,6 +10,7 @@ EXITCODE=0
 # 全局默认变量
 BIND_ADDR="127.0.0.1"
 SERVER_NUM=
+source /data/install/weops_version
 CLIENT_PORT=9092
 DATA_DIR="/var/lib/kafka"
 CLUSTER_IP_LIST=
@@ -95,9 +96,9 @@ done
 if [[ -z $CLUSTER_IP_LIST ]]; then
     warning "CLUSTER_IP_LIST(-j)不能为空"
 fi
-if ! command -v java &>/dev/null; then
-    warning "java command not found, please install jdk first"
-fi
+# if ! command -v java &>/dev/null; then
+#     warning "java command not found, please install jdk first"
+# fi
 # SERVER_NUM
 read -r -a X <<< "${CLUSTER_IP_LIST//,/ }"
 SERVER_NUM=${#X[@]}
@@ -113,12 +114,12 @@ if [[ $EXITCODE -ne 0 ]]; then
 fi
 
 # 安装 kafka
-if ! rpm -ql kafka &>/dev/null; then
-    yum -q -y install kafka 
-fi
+# if ! rpm -ql kafka &>/dev/null; then
+#     yum -q -y install kafka 
+# fi
 
 # 配置目录权限
-install -d -m 755 -o kafka -g kafka "$DATA_DIR"
+install -d -m 755 -o 1001 -g 1001 "$DATA_DIR" /var/log/kafka /etc/kafka
 
 # 生成kafka的broker id
 myid=
@@ -142,18 +143,19 @@ log "生成默认的kafka主配置文件 /etc/kafka/server.properties"
 
 # 添加KAFKA_HEAP_OPTS
 # 检查文件中是否存在 KAFKA_HEAP_OPTS
-if grep -q "KAFKA_HEAP_OPTS" /etc/sysconfig/kafka; then
-  echo "KAFKA_HEAP_OPTS already exists. Skipping..."
-else
-  # 如果文件中不存在 KAFKA_HEAP_OPTS，则将其添加到文件末尾
-  echo "KAFKA_HEAP_OPTS=\"-Xmx2g -Xms2g\"" >> /etc/sysconfig/kafka
-  echo "KAFKA_HEAP_OPTS added to the config file."
-fi
+# if grep -q "KAFKA_HEAP_OPTS" /etc/sysconfig/kafka; then
+#   echo "KAFKA_HEAP_OPTS already exists. Skipping..."
+# else
+#   # 如果文件中不存在 KAFKA_HEAP_OPTS，则将其添加到文件末尾
+#   echo "KAFKA_HEAP_OPTS=\"-Xmx2g -Xms2g\"" >> /etc/sysconfig/kafka
+#   echo "KAFKA_HEAP_OPTS added to the config file."
+# fi
 
 # 生成主配置
 cat <<EOF > /etc/kafka/server.properties
 broker.id=${myid}
 listeners=PLAINTEXT://${BIND_ADDR}:${CLIENT_PORT}
+advertised.listeners=PLAINTEXT://${BIND_ADDR}:${CLIENT_PORT}
 port=${CLIENT_PORT}
 log.dirs=${DATA_DIR}
 num.network.threads=4
@@ -164,7 +166,7 @@ socket.request.max.bytes=104857600
 num.partitions=1
 default.replication.factor=${REPLICA_FACTOR}
 num.recovery.threads.per.data.dir=1
-log.retention.hours=72
+log.retention.hours=24
 log.retention.bytes=21474836480
 log.segment.bytes=1073741824
 log.retention.check.interval.ms=300000
@@ -176,7 +178,15 @@ delete.topic.enable=true
 offsets.retention.minutes=20160
 EOF
 
-log "设置kafka开机启动"
-systemctl enable kafka
-# --no-block可以防止bootstrap阶段选举集群时启动卡住
-systemctl --no-block start kafka
+if docker ps -a | awk '{print $NF}' | grep -wq "kafka"; then
+  log "检测到已存在的kafka,删除"
+  docker rm -f kafka
+fi
+
+docker run -d \
+    --name=kafka \
+    --net=host \
+    -v /etc/kafka/server.properties:/etc/kafka/server.properties \
+    -v /var/log/kafka:/var/log/kafka \
+    -v $DATA_DIR:$DATA_DIR \
+    $KAFKA_IMAGE

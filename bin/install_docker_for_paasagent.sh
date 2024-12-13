@@ -3,23 +3,31 @@
 set -e
 
 SELF_DIR="$(dirname "$(readlink -f "$0")")"
-DOCKER_VERSION="20.10.23"
-warning () {
-    echo "$@" 1>&2
-    EXITCODE=$((EXITCODE + 1))
-}
-source ${SELF_DIR}/../load_env.sh
 
-if ! rpm -q install "docker-ce-$DOCKER_VERSION";then
-    yum install "docker-ce-$DOCKER_VERSION" -y
+source ${SELF_DIR}/../load_env.sh
+source ${SELF_DIR}/../functions
+
+export DEBIAN_FRONTEND=noninteractive
+
+#加载版本
+set -a
+source /data/install/weops_version
+set +a
+# 卸载旧版本
+for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove $pkg; done
+apt autoremove -y
+
+if ! dpkg -l  docker-ce=$DOCKER_VERSION; then
+    apt-get install docker-ce=$DOCKER_VERSION -y
 fi
+
 # TODO: 需要自定义下daemon.json(参考dockerctl的start_docker()函数)
 [[ -d /etc/docker ]] || mkdir -p /etc/docker
 cat <<EOF > /etc/docker/daemon.json
 {
     "data-root": "$BK_HOME/public/paas_agent/docker",
-    "exec-opts": ["native.cgroupdriver=cgroupfs"],
     "insecure-registries": ["repo.service.consul:8181"],
+    "exec-opts": ["native.cgroupdriver=cgroupfs"],
     "bridge": "none", 
     "iptables": false, 
     "ip-forward": true,
@@ -30,13 +38,13 @@ cat <<EOF > /etc/docker/daemon.json
         "max-size": "500m",
         "max-file":"5"
     },
-    "default-ulimits": {
-        "core": {
-            "Name": "core",
-            "Hard": 0,
-            "Soft": 0
-        }
-    },
+  "default-ulimits": {
+    "core": {
+      "Name": "core",
+      "Hard": 0,
+      "Soft": 0
+    }
+  },
     "storage-driver": "overlay2",
     "storage-opts": [
         "overlay2.override_kernel_check=true"
@@ -57,5 +65,5 @@ if [[ -d  ${BK_PKG_SRC_PATH}/image ]];then
     rsync -avz ${BK_PKG_SRC_PATH}/image/runtool /usr/bin/
     chmod +x  /usr/bin/runtool
 else
-    warning "docker images not found"
+    warn "docker images not found"
 fi

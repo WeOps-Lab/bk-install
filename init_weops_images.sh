@@ -1,9 +1,5 @@
 #!/bin/bash
-# 部署regestry
-if [[ ! -d /data/registry ]];then
-    mkdir -p /data/registry
-fi
-
+docker load < /data/ubuntu/images/registry.tgz
 if [[ ! -f /opt/registry.conf ]];then
     cat <<EOF > /opt/registry.conf
 version: 0.1
@@ -19,7 +15,7 @@ EOF
 fi
 
 if [[ ! $(docker ps -a|grep registry) ]];then
-    docker run -d --net=host --restart=always --name registry -v /opt/registry.conf:/etc/docker/registry/config.yml:ro -v /data/registry:/data/registry docker-bkrepo.cwoa.net/ce1b09/weops-docker/registry:latest
+    docker run -d --net=host --restart=always --name registry -v /opt/registry.conf:/etc/docker/registry/config.yml:ro -v /data/ubuntu/registry:/data/registry docker-bkrepo.cwoa.net/ce1b09/weops-docker/registry:latest
 fi
 
 images=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^docker-bkrepo.cwoa.net/ce1b09/weops-docker/")

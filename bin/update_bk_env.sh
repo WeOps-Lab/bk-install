@@ -92,21 +92,21 @@ fi
 
 # 安装基础命令和基础包
 COMMAND_RPM_LIST=(rsync jq expect uuid lsof)
-COMMON_RPM_LIST=(openssl-devel readline-devel libcurl-devel libxml2-devel glibc-devel zlib-devel iproute sysvinit-tools procps-ng bind-utils bash-completion)
-yum -y install "${COMMAND_RPM_LIST[@]}" "${COMMON_RPM_LIST[@]}"
+COMMON_RPM_LIST=(dialog openssl libssl-dev zlib1g-dev libreadline-dev libcurl4-openssl-dev libcurl4 libxml2-dev iproute2 dnsutils bash-completion)
+apt-get -y install "${COMMAND_RPM_LIST[@]}" "${COMMON_RPM_LIST[@]}"
 
 rt=0
 for cmd in "${COMMAND_RPM_LIST[@]}"; do 
-    yum install -y "${cmd}"
+    apt-get install -y "${cmd}"
     if ! command -v "$cmd" >/dev/null; then
-        echo "$cmd is not found, yum install $cmd failed." >&2 
+        echo "$cmd is not found, apt-get install $cmd failed." >&2 
         ((rt++))
     fi
 done
 
 for rpm in "${COMMON_RPM_LIST[@]}"; do
-    if ! rpm -q "${rpm}" > /dev/null 2>&1; then
-        echo "$rpm is not installed, yum install $cmd failed." >&2 
+    if ! dpkg -l "${rpm}" > /dev/null 2>&1; then
+        echo "$rpm is not installed, apt-get install $cmd failed." >&2 
         ((rt++))
     fi
 done

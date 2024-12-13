@@ -14,6 +14,7 @@ CLIENT_PORT=2181
 PEER_PORT=2888
 ELECTION_PORT=3888
 DATA_DIR="/var/lib/zookeeper"
+source /data/install/weops_version
 CLUSTER_IP_LIST=
 
 usage () {
@@ -101,7 +102,25 @@ while (( $# > 0 )); do
             ;;
     esac
     shift 
-done 
+done
+
+check_port_alive () {
+    local port=$1
+
+    lsof -i:$port -sTCP:LISTEN 1>/dev/null 2>&1
+
+    return $?
+}
+wait_port_alive () {
+    local port=$1
+    local timeout=${2:-10}
+
+    for i in $(seq $timeout); do
+        check_port_alive $port && return 0
+        sleep 1
+    done
+    return 1
+}
 
 # 参数合法性有效性校验，这些可以使用通用函数校验。
 if ! [[ $SERVER_NUM -eq 1 || $SERVER_NUM -eq 3 || $SERVER_NUM -eq 5 || $SERVER_NUM -eq 7 ]]; then
@@ -118,12 +137,12 @@ if [[ $EXITCODE -ne 0 ]]; then
 fi
 
 # 安装 zookeeper
-if ! rpm -ql zookeeper &>/dev/null; then
-    yum -y install zookeeper 
-fi
+# if ! rpm -ql zookeeper &>/dev/null; then
+#     yum -y install zookeeper 
+# fi
 
 # 创建data_dir
-install -d -m 755 -o zookeeper -g zookeeper "$DATA_DIR"
+install -d -m 755 -o 1000 -g 1000 "$DATA_DIR" "/var/log/zookeeper" "/etc/zookeeper"
 
 # 生成zookeeper配置
 log "生成zookeeper主配置文件 /etc/zookeeper/zoo.cfg"
@@ -147,10 +166,6 @@ autopurge.purgeInterval=8
 # The second one is used for leader election
 EOF
 
-# 修改JMX监听本地回环地址
-if [[ -f /etc/sysconfig/zookeeper ]]; then
-    sed -i '/^JMXLOCALONLY/s/false/true/' /etc/sysconfig/zookeeper
-fi
 
 # 生成zookeeper的集群配置
 read -r -a X <<< "${CLUSTER_IP_LIST//,/ }"
@@ -166,13 +181,30 @@ if [[ -z "$myid" ]]; then
     error "bind ip(-b) is not include in ip list(-j), can't auto-generate myid"
 else
     echo -n "$myid" > "$DATA_DIR"/myid
-    chown root.zookeeper "$DATA_DIR"/myid
+    chown root:1000 "$DATA_DIR"/myid
 fi
 
-chown root.zookeeper -R /etc/zookeeper
+chown root:1000 -R /etc/zookeeper
 chmod 750 /etc/zookeeper/*
+if docker ps -a | awk '{print $NF}' | grep -wq "zookeeper"; then
+  log "检测到已存在的zookeeper,删除"
+  docker rm -f zookeeper
+fi
+log "启动zookeeper容器"
+docker run -d \
+    --name zookeeper \
+    --restart always \
+    --net host \
+    -e JMXLOCALONLY=true \
+    -v /etc/zookeeper/zoo.cfg:/conf/zoo.cfg \
+    -v /var/log/zookeeper:/var/log/zookeeper \
+    -v ${DATA_DIR}:${DATA_DIR} \
+    $ZOOKEEPER_IMAGE
 
-log "设置zookeeper开机启动"
-systemctl enable zookeeper
-# --no-block可以防止bootstrap阶段选举集群时启动卡住
-systemctl --no-block start zookeeper
+log "等待zookeeper启动"
+wait_port_alive $CLIENT_PORT 10
+log "zookeeper启动成功"
+# log "设置zookeeper开机启动"
+# systemctl enable zookeeper
+# # --no-block可以防止bootstrap阶段选举集群时启动卡住
+# systemctl --no-block start zookeeper

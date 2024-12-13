@@ -143,8 +143,8 @@ rsync -a --delete "${MODULE_SRC_DIR}/$MODULE/" "$PREFIX/$MODULE/"
 case $USERMGR_MODULE in 
     api) 
         # 安装rpm依赖包，如果不存在
-        if ! rpm -q "${RPM_DEP[@]}" >/dev/null; then
-            yum -y install "${RPM_DEP[@]}"
+        if ! dpkg -l "${RPM_DEP[@]}" >/dev/null; then
+            apt -y install "${RPM_DEP[@]}"
         fi
        # 安装虚拟环境和依赖包
         "${SELF_DIR}"/install_py_venv_pkgs.sh -e -p "$PYTHON_PATH" \

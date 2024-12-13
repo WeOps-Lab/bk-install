@@ -18,7 +18,7 @@ SELF_DIR=$(dirname "$(readlink -f "$0")")
 
 # 模块安装后所在的上一级目录
 PREFIX=/data/bkee
-
+source /data/install/weops_version
 # 模块目录的上一级目录
 MODULE_SRC_DIR=/data/src
 
@@ -28,10 +28,13 @@ PYTHON_PATH=/opt/py36/bin/python3.6
 # 默认安装所有子模块
 MODULE=bknodeman
 PROJECTS=(nodeman)
-RPM_DEP=(mysql-devel gcc)
+RPM_DEP=(libmysqlclient-dev gcc)
 ENV_FILE=
 BIND_ADDR=127.0.0.1
 OUTER_IP=
+
+# 使用的docker镜像
+# IMAGE=docker-bkrepo.cwoa.net/ce1b09/weops-docker/bknodeman:v2.3.1
 
 usage () {
     cat <<EOF
@@ -157,19 +160,8 @@ EOF
 rsync -a --delete "${MODULE_SRC_DIR}/$MODULE" "$PREFIX/"
 
 # 安装rpm依赖包，如果不存在
-if ! rpm -q "${RPM_DEP[@]}" >/dev/null; then
-    yum -y install "${RPM_DEP[@]}"
-fi
-
-# 安装虚拟环境和pip包
-"${SELF_DIR}"/install_py_venv_pkgs.sh -e -p "$PYTHON_PATH" \
-    -n "${MODULE}-nodeman" \
-    -w "${PREFIX}/.envs" -a "$PREFIX/$MODULE/nodeman" \
-    -s "$PREFIX"/bknodeman/support-files/pkgs \
-    -r "$PREFIX/$MODULE/nodeman/requirements.txt"
-if [[ "$PYTHON_PATH" = *_e* ]]; then
-    # 拷贝加密解释器 //todo
-    cp -a "${PYTHON_PATH}"_e "$PREFIX/.envs/${MODULE}-nodeman/bin/python"
+if ! dpkg -l "${RPM_DEP[@]}" >/dev/null; then
+    apt -y install "${RPM_DEP[@]}"
 fi
 
 # 渲染配置
@@ -183,32 +175,27 @@ fi
     -E WAN_IP="$OUTER_IP" \
     "$MODULE_SRC_DIR"/$MODULE/support-files/templates/*nodeman*
 
-# 生成systemd的配置
-cat > /usr/lib/systemd/system/bk-nodeman.service <<EOF
-[Unit]
-Description=Blueking Nodeman backend Supervisor daemon
-After=network-online.target
-PartOf=blueking.target
+# 生成docker用的supervisord配置
+sed "s@/data/bkce/.envs/bknodeman-nodeman@/cache/.bk/env@" /data/bkce/etc/supervisor-bknodeman-nodeman.conf > /data/bkce/etc/supervisor-bknodeman-nodeman.docker.conf
 
-[Service]
-User=blueking
-Group=blueking
-Type=forking
-EnvironmentFile=/etc/blueking/env/local.env
-Environment=BK_FILE_PATH=$PREFIX/bknodeman/cert/saas_priv.txt
-ExecStart=/opt/py36/bin/supervisord -c $PREFIX/etc/supervisor-bknodeman-nodeman.conf
-ExecStop=/opt/py36/bin/supervisorctl -c $PREFIX/etc/supervisor-bknodeman-nodeman.conf shutdown
-ExecReload=/opt/py36/bin/supervisorctl -c $PREFIX/etc/supervisor-bknodeman-nodeman.conf reload
-Restart=on-failure
-RestartSec=3s
-LimitNOFILE=204800
-
-[Install]
-WantedBy=multi-user.target blueking.target
-EOF
-
-systemctl daemon-reload
-
-if ! systemctl is-enabled "bk-nodeman" &>/dev/null; then
-    systemctl enable "bk-nodeman"
+# 启动nodeman容器
+if [ "$(docker ps -aq -f name=bknodeman-nodeman)" ]; then
+    echo "Container bknodeman-nodeman is running. Stopping and removing it now."
+    docker rm -f bknodeman-nodeman
+    # 清理相关的pid文件
+    rm -vf /var/run/bknodeman/{celerybeat.pid,nodeman-supervisord.pid,nodeman-supervisord.sock}
 fi
+
+docker run -itd \
+-v /data/bkce/bknodeman/nodeman:/data/bkce/bknodeman/nodeman \
+-v /data/bkce/logs/bknodeman:/data/bkce/logs/bknodeman \
+-v /data/bkce/etc/supervisor-bknodeman-nodeman.docker.conf:/data/bkce/etc/supervisor-bknodeman-nodeman.conf:ro \
+-v /data/bkce/bknodeman/support-files/pkgs:/pkgs \
+-v /var/run/bknodeman:/var/run/bknodeman \
+-v /etc/blueking/env:/etc/blueking/env \
+-v /data/bkce/public/bknodeman:/data/bkce/public/bknodeman \
+-v /data/bkce/public/nginx/cache:/data/bkce/public/nginx/cache \
+-v /data/bkce/bknodeman/cert/saas_priv.txt:/data/bkce/bknodeman/cert/saas_priv.txt:ro \
+-e BK_FILE_PATH=/data/bkce/bknodeman/cert/saas_priv.txt \
+-e PYTHON_BIN=/cache/.bk/env/bin/python3.6_e \
+--net=host --name=bknodeman-nodeman ${NODEMAN_IMAGE} bash -c "cd /data/bkce/bknodeman/nodeman && supervisord -n -c /data/bkce/etc/supervisor-bknodeman-nodeman.conf"
