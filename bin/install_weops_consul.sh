@@ -105,6 +105,7 @@ if [ "$INIT" = "true" ]; then
         -server-port=8603 \
         -serf-wan-port=8602 \
         -serf-lan-port=8601 \
+        -grpc-tls-port=8604 \
         -http-port=8501 \
         -bind ${BIND_IP} \
         -encrypt="${CONSUL_KEY}"
@@ -135,6 +136,7 @@ else
         -server-port=8603 \
         -serf-wan-port=8602 \
         -serf-lan-port=8601 \
+        -grpc-tls-port=8604 \
         -http-port=8501 \
         -bind ${BIND_IP} \
         -encrypt="${CONSUL_KEY}"

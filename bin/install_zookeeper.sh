@@ -154,6 +154,7 @@ initLimit=10
 syncLimit=20
 dataDir=$DATA_DIR
 # 建议datalogDir放到另外一块磁盘，增加性能
+admin.enableServer=false
 #dataLogDir=/disk/xxxx
 clientPortAddress=$BIND_ADDR
 clientPort=$CLIENT_PORT

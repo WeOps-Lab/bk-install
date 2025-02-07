@@ -219,6 +219,7 @@ case $service in
         _bkc install saas-o bk_nodeman
         _bkc sync nodeman
         _bkc install nodeman
+        _bkc restart nodeman
         echo "等待bknodeman启动成功"
         sleep 10
         _bkc initdata nodeman

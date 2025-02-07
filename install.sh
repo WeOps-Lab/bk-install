@@ -1362,7 +1362,7 @@ install_weopsconsul () {
             emphasize "skip install weopsconsul on host: ${ip}"
             continue
         fi
-        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_consul.sh" -b "${ip}" -k "${WEOPS_CONSUL_KEYSTR_32BYTES}" -j "${BK_WEOPSCONSUL_INIT_IP}"
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_consul.sh -b ${ip} -k ${WEOPS_CONSUL_KEYSTR_32BYTES} -j ${BK_WEOPSCONSUL_INIT_IP}"
     done
 }
 
@@ -1398,7 +1398,7 @@ install_vault () {
     emphasize "grant mysql privilege for vault"
     ssh $BK_MYSQL_MASTER_IP "mysql --login-path=default-root -e \"GRANT ALL PRIVILEGES ON *.* TO 'root'@\"${BK_VAULT_INIT_IP}\" IDENTIFIED BY \"${BK_MYSQL_ADMIN_PASSWORD}\";"
     emphasize "install vault init node on host: ${BK_VAULT_INIT_IP}"
-    "${SELF_DIR}"/pcmd.sh -H "${BK_VAULT_INIT_IP}" "${CTRL_DIR}/bin/install_weops_vault.sh -i true -s mysql-default.service.consul -p ${BK_MYSQL_ADMIN_PASSWORD} -P 3306 -u ${BK_MYSQL_ADMIN_USER}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_VAULT_INIT_IP}" "${CTRL_DIR}/bin/install_weops_vault.sh -i -s mysql-default.service.consul -p ${BK_MYSQL_ADMIN_PASSWORD} -P 3306 -u ${BK_MYSQL_ADMIN_USER}"
     reg_consul_svc vault 8200 "${BK_VAULT_INIT_IP}"
     "${SELF_DIR}"/pcmd.sh -H "${BK_VAULT_INIT_IP}" "cat /data/vault.secret" > /data/vault.secret
     if [[ ! -f "${SELF_DIR}"/bin/04-final/vault.env ]]; then
@@ -1414,7 +1414,7 @@ install_vault () {
             emphasize "skip install vault on host: ${ip}"
             continue
         fi
-        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_vault.sh -i false -s mysql-default.service.consul -p ${BK_MYSQL_ADMIN_PASSWORD} -P 3306 -u ${BK_MYSQL_ADMIN_USER}"
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_vault.sh -s mysql-default.service.consul -p ${BK_MYSQL_ADMIN_PASSWORD} -P 3306 -u ${BK_MYSQL_ADMIN_USER}"
         reg_consul_svc vault 8200 "${ip}"
     done
 }
@@ -1443,7 +1443,7 @@ install_weopsrdp () {
         "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_rdp.sh -I /o/ -s ${BK_PAAS_PUBLIC_URL}" 
     done
     emphasize "update consul kv"
-    consul kv put bkapps/upstreams/prod/views "[\"${BK_WEOPSRDP_IP0}:8082\",\"${BK_WEOPSRDP_IP1}:8082 backup\"]"
+    docker exec -i bk-consul consul kv put bkapps/upstreams/prod/views "[\"${BK_WEOPSRDP_IP0}:8082\",\"${BK_WEOPSRDP_IP1}:8082 backup\"]"
     emphasize "reload nginx"
     "${SELF_DIR}"/pcmd.sh -m nginx 'systemctl reload consul-template && /usr/local/openresty/nginx/sbin/nginx -s reload'
 }
@@ -1460,6 +1460,7 @@ install_minio () {
         "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_minio.sh -a ${WEOPS_MINIO_ACCESS_KEY} -s ${WEOPS_MINIO_SECRET_KEY} -l \"${minio_server_list}\""
         reg_consul_svc minio 9015 "${ip}"
     done
+    docker exec -i bk-consul consul kv put bkapps/upstreams/prod/minio "[\"${BK_MINIO_IP0}:9015\",\"${BK_MINIO_IP1}:9015\",\"${BK_MINIO_IP2}:9015\",\"${BK_MINIO_IP3}:9015\"]"
 }
 
 install_casbinmesh () {
@@ -1499,7 +1500,7 @@ install_datart () {
         reg_consul_svc datart 8080 "${ip}"
     done
     emphasize "update consul kv"
-    consul kv put bkapps/upstreams/prod/datart "[\"${BK_DATART_IP0}:8080\",\"${BK_DATART_IP1}:8080\"]"
+    docker exec -i bk-consul consul kv put bkapps/upstreams/prod/datart "[\"${BK_DATART_IP0}:8080\",\"${BK_DATART_IP1}:8080\"]"
     emphasize "sync static file to control"
     if [[ -f /data/static.tgz ]]; then
         emphasize "file already exists, skip"
@@ -1532,14 +1533,14 @@ install_age () {
 install_kafkaadapter () {
     local module=kafkaadapter
     emphasize "install kafkaadapter on host: ${BK_KAFKAADAPTER_IP_COMMA}"
-    APP_AUTH_TOKEN=$(mysql --login-path=mysql-default -eN "select auth_token from open_paas.paas_app where code='weops_saas';")
+    APP_AUTH_TOKEN=$(mysql --login-path=mysql-default -Ne "select auth_token from open_paas.paas_app where code='weops_saas';")
     if [[ -z ${APP_AUTH_TOKEN} ]]; then
         emphasize "get app auth token failed"
         exit 1
     else
         for ip in ${BK_KAFKAADAPTER_IP[@]}; do
             "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_kafka_adapter.sh -u \"${WEOPS_KAFKA_ADAPTER_USER}\" -p \"${WEOPS_KAFKA_ADAPTER_PASSWORD}\" -a \"${APP_AUTH_TOKEN}\""
-        reg_consul_svc kafkaadapter 8080 "${ip}"
+        reg_consul_svc kafkaadapter 8086 "${ip}"
         done
     fi
 }

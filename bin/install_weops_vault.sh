@@ -92,6 +92,10 @@ backend "mysql" {
     password = "${MYSQL_PASSWORD}"
 }
 
+stroage "raft" {
+    path = "/data/vault/data"
+}
+
 listener "tcp" {
     address = "0.0.0.0:8200"
     tls_disable = 1
@@ -108,7 +112,7 @@ fi
 docker run -d --restart=always --net=host \
 -v /data/vault/config/vault.hcl:/etc/vault.hcl \
 --name=vault \
-docker-bkrepo.cwoa.net/ce1b09/weops-docker/vault server -config=/etc/vault.hcl
+$VAULT_IMAGE server -config=/etc/vault.hcl
 
 if [[ "$INIT" == true ]]; then
     # wait for vault online
@@ -116,4 +120,7 @@ if [[ "$INIT" == true ]]; then
     log "init vault"
     docker exec vault sh -c "export VAULT_ADDR=http://127.0.0.1:8200 vault operator init || echo 'vault already init' && exit 0"
     docker exec vault sh -c "export VAULT_ADDR=http://127.0.0.1:8200 && vault operator init -key-shares=1 -key-threshold=1" > /data/vault.secret
+    export VAULT_TOKEN=$(cat /data/vault.secret | grep "Initial Root Token" | awk '{print $4}')
+    log "enable kv secret"
+    docker exec vault sh -c "export VAULT_ADDR=http://127.0.0.1:8200;export VAULT_TOKEN=${VAULT_TOKEN};vault secrets enable -path=secret kv"
 fi

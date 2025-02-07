@@ -91,7 +91,7 @@ docker run -d --restart=always --net=host \
 -e KAFKA_BROKER_LIST=kafka.service.consul:9092 \
 -e BASIC_AUTH_USERNAME=${USERNAME} \
 -e BASIC_AUTH_PASSWORD=${PASSWORD} \
--e PORT=8080 \
+-e PORT=8086 \
 -e BKAPP_PAAS_HOST=http://paas.service.consul \
 -e BKAPP_WEOPS_APP_ID=weops_saas \
 -e BKAPP_WEOPS_APP_SECRET=${APP_AUTH_TOKEN} \
