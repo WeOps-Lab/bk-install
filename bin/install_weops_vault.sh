@@ -48,6 +48,7 @@ version () {
 while (( $# > 0 )); do 
     case "$1" in
         --init | -i)
+            shift
             INIT=true
             ;;
         --help | -h | '-?' )
