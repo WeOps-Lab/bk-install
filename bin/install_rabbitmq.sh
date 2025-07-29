@@ -127,19 +127,30 @@ MNESIA_BASE=${DATA_DIR}
 LOG_BASE=${LOG_DIR}
 EOF
 
-# 配置系统的logrotate
-cat << EOF >> /etc/rabbitmq/rabbitmq.conf
+# 生成rabbitmq配置文件
+cat <<"EOF" > /etc/rabbitmq/rabbitmq.conf
 # 当日志文件达到 10 MB 时触发轮转
 log.file.rotation.size = 10485760
 # 最当前日志文件外，最多保留 10 个日志文件
 log.file.rotation.count = 10
-# 是否压缩
-log.file.rotation.compress = true
 # 新增网络分区处理
 cluster_partition_handling = autoheal
 net_ticktime = 120
 EOF
 
+# 配置系统的logrotate
+# cat <<EOF > /etc/logrotate.d/rabbitmq-server
+# $LOG_DIR/*.log {
+#     daily
+#     missingok
+#     rotate 14
+#     size 100M
+#     compress
+#     notifempty
+#     sharedscripts
+#     endscript
+# }
+# EOF
 
 # 如果nodename包含period，那么增加USE_LONGNAME的参数
 if [[ $NODE_NAME =~ \. ]]; then
