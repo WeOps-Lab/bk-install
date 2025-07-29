@@ -184,8 +184,8 @@ delete_old_backup () {
     log "delete those files before $oldfileleftday days ago"
     for suffix in tar.gz split
     do 
-        find "$backupdir" -maxdepth 1  -name "${dbtype}-${productname}*.${suffix}" -mtime +"${oldfileleftday}" -follow | sed "s/^/\t/"
-        find "$backupdir" -maxdepth 1  -name "${dbtype}-${productname}*.${suffix}" -mtime +"${oldfileleftday}" -follow -exec rm -f {} \;
+        find "$backupdir" -maxdepth 1  -name "${dbtype}-${productname}*.${suffix}*" -mtime +"${oldfileleftday}" -follow | sed "s/^/\t/"
+        find "$backupdir" -maxdepth 1  -name "${dbtype}-${productname}*.${suffix}*" -mtime +"${oldfileleftday}" -follow -exec rm -f {} \;
     done 
     log "$FUNCNAME end"
 }
