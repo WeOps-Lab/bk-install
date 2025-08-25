@@ -1501,10 +1501,10 @@ install_datart () {
             continue
         fi
         "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_datart.sh -m \"jdbc:mysql://mysql-default.service.consul:3306/datart?&allowMultiQueries=true&characterEncoding=utf-8\" -u root -p \"${BK_MYSQL_ADMIN_PASSWORD}\" -d ${BK_DOMAIN}"
-        reg_consul_svc datart 8080 "${ip}"
+        reg_consul_svc datart 8083 "${ip}"
     done
     emphasize "update consul kv"
-    consul kv put bkapps/upstreams/prod/datart "[\"${BK_DATART_IP0}:8080\",\"${BK_DATART_IP1}:8080\"]"
+    consul kv put bkapps/upstreams/prod/datart "[\"${BK_DATART_IP0}:8083\",\"${BK_DATART_IP1}:8083\"]"
     emphasize "sync static file to control"
     if [[ -f /data/static.tgz ]]; then
         emphasize "file already exists, skip"
