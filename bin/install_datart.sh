@@ -191,6 +191,7 @@ if [[ $(docker ps -a | grep datart) ]]; then
 fi
 
 docker run -d -v /data/bkce/weops/datart/config/application-config.yml:/apps/config/profiles/application-config.yml:ro \
+    -v /data/bkce/weops/datart/config/datart.conf:/apps/config/datart.conf:ro \
     --restart=always \
     --net=host \
     --name=datart \
