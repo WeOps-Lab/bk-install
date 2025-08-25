@@ -108,6 +108,33 @@ if [[ -f /data/bkce/weops/datart/config/application-config.yml ]]; then
     warning "已经存在datart的配置文件, 文件将会被覆盖"  
 fi
 
+cat <<EOF > /data/bkce/weops/datart/config/datart.conf
+# this file has the highest priority, if val is not blank, then will replace the config
+
+# datasource config
+datasource.ip=
+datasource.port=
+datasource.database=
+datasource.username=
+datasource.password=
+
+# server
+server.port=8083
+server.address=0.0.0.0
+
+# datart config
+datart.address=http://127.0.0.1
+datart.send-mail=false
+datart.webdriver-path=http://127.0.0.1:4444/wd/hub
+datart.user.register=true
+# 注册邮件有效期/小时, 默认48小时
+datart.register.expire-hours=
+# 邀请邮件有效期/小时, 默认48小时
+datart.invite.expire-hours=
+# 租户管理模式：platform-平台(默认)，team-团队
+datart.tenant-management-mode=platform
+EOF
+
 cat << EOF > /data/bkce/weops/datart/config/application-config.yml
 spring:
   datasource:
@@ -117,7 +144,7 @@ spring:
     username: ${MYSQL_USERNAME}
     password: ${MYSQL_PASSWORD}
 server:
-  port: 8080
+  port: 8083
   address: 0.0.0.0
   ssl:
     enabled: false
