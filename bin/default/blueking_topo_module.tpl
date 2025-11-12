@@ -46,9 +46,12 @@ public	influxdb
 public	kafka
 public	mongodb
 public	mysql
+public	mysql_master
+public	mysql_slave
 public	nginx
 public	rabbitmq
 public	redis
+public	redis_sentinel
 public	zookeeper
 public 	openresty
 public 	consul-template

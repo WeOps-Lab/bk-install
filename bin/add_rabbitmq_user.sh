@@ -6,7 +6,6 @@ set -euo pipefail
 # 重置PATH
 PATH=/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 export PATH
-
 # 通用脚本框架变量
 SELF_DIR=$(dirname "$(readlink -f "$0")")
 PROGRAM=$(basename "$0")
@@ -90,9 +89,9 @@ while (( $# > 0 )); do
 done 
 
 # check parameters
-if ! command -v rabbitmqctl &>/dev/null; then
-    fail "there is no rabbitmqctl on this host. please run script on rabbitmq host"
-fi
+# if ! command -v docker exec rabbitmq rabbitmqctl &>/dev/null; then
+#     fail "there is no docker exec rabbitmq rabbitmqctl on this host. please run script on rabbitmq host"
+# fi
 if [[ -z "$MQ_USER" || -z "$MQ_PASSWORD" ]]; then
     warning "-u , -p must not be empty"
 fi
@@ -105,29 +104,29 @@ if (( EXITCODE > 0 )); then
     usage_and_exit "$EXITCODE"
 fi
 
-if ! rabbitmq-diagnostics -q check_running &>/dev/null && rabbitmq-diagnostics -q check_local_alarms &>/dev/null; then
+if ! docker exec rabbitmq rabbitmq-diagnostics -q check_running &>/dev/null && docker exec rabbitmq rabbitmq-diagnostics -q check_local_alarms &>/dev/null; then
     echo "Rabbitmq service is abnormal, please check."
-    rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q check_local_alarms 2>&1
+    docker exec rabbitmq rabbitmq-diagnostics -q check_running && docker exec rabbitmq rabbitmq-diagnostics -q check_local_alarms 2>&1
     exit 1
 fi
     
-if rabbitmqctl list_users | grep -w "$MQ_USER"; then
+if docker exec rabbitmq rabbitmqctl list_users | grep -w "$MQ_USER"; then
     echo "$MQ_USER already exists"
 else
-    rabbitmqctl add_user "$MQ_USER" "$MQ_PASSWORD" \
+    docker exec rabbitmq rabbitmqctl add_user "$MQ_USER" "$MQ_PASSWORD" \
         || fail "add rabbitmq user for $MQ_USER failed."
 
-    rabbitmqctl set_user_tags "$MQ_USER" management \
+    docker exec rabbitmq rabbitmqctl set_user_tags "$MQ_USER" management \
     || fail "set tags for $MQ_USER failed." 
 fi
 
 # add user and vhost and permissions
 
-rabbitmqctl add_vhost "$MQ_VHOST" \
+docker exec rabbitmq rabbitmqctl add_vhost "$MQ_VHOST" \
     || fail "add vhost for $MQ_USER failed."
 
-rabbitmqctl set_permissions -p "$MQ_VHOST" "$MQ_USER" ".*" ".*" ".*" \
+docker exec rabbitmq rabbitmqctl set_permissions -p "$MQ_VHOST" "$MQ_USER" ".*" ".*" ".*" \
     || fail "set permissions for $MQ_USER failed."
 
-rabbitmqctl set_policy ha-all '^' '{"ha-mode": "all","ha-sync-mode":"automatic"}' -p "$MQ_VHOST" \
+docker exec rabbitmq rabbitmqctl set_policy ha-all '^' '{"ha-mode": "all","ha-sync-mode":"automatic"}' -p "$MQ_VHOST" \
     || fail "set ha policy for $MQ_VHOST failed."

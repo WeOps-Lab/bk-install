@@ -10,7 +10,7 @@
 PROGRAM=$(basename "$0")
 VERSION=1.0
 EXITCODE=0
-
+source /data/install/weops_version
 # 全局默认变量
 ADMIN_USER=
 ADMIN_PASSWORD=
@@ -106,19 +106,21 @@ if (( EXITCODE > 0 )); then
     usage_and_exit "$EXITCODE"
 fi
 
-# 安装依赖
-if ! rpm -ql rabbitmq-server-${RABBITMQ_VERSION} &>/dev/null; then
-    yum -q -y install socat || error "安装rabbitmq依赖的socat失败"
-    yum -q -y install rabbitmq-server-${RABBITMQ_VERSION} || error "安装rabbitmq server${RABBITMQ_VERSION}失败"
-fi
+# # 安装依赖
+# if ! rpm -ql rabbitmq-server-${RABBITMQ_VERSION} &>/dev/null; then
+#     yum -q -y install socat || error "安装rabbitmq依赖的socat失败"
+#     yum -q -y install rabbitmq-server-${RABBITMQ_VERSION} || error "安装rabbitmq server${RABBITMQ_VERSION}失败"
+# fi
 
-install -o rabbitmq -g rabbitmq -d "${LOG_DIR}"/
-install -o rabbitmq -g rabbitmq -d "${DATA_DIR}"/
+install -o 999 -g 999 -d "${LOG_DIR}"/
+install -o 999 -g 999 -d "${DATA_DIR}"/
+install -o 999 -g 999 -d /etc/rabbitmq/
+install -o 999 -g 999 -d /var/lib/rabbitmq/
 
 # 调整limits，根据：https://www.rabbitmq.com/configure.html#kernel-limits
-install -d -m 755 -o root -g root /etc/systemd/system/rabbitmq-server.service.d/
-echo '[Service]' > /etc/systemd/system/rabbitmq-server.service.d/limits.conf
-echo 'LimitNOFILE=102400' >> /etc/systemd/system/rabbitmq-server.service.d/limits.conf
+# install -d -m 755 -o root -g root /etc/systemd/system/rabbitmq-server.service.d/
+# echo '[Service]' > /etc/systemd/system/rabbitmq-server.service.d/limits.conf
+# echo 'LimitNOFILE=102400' >> /etc/systemd/system/rabbitmq-server.service.d/limits.conf
 
 # 生成环境变量配置文件（主要用于重新定义各种路径）
 cat <<EOF > /etc/rabbitmq/rabbitmq-env.conf
@@ -127,36 +129,66 @@ MNESIA_BASE=${DATA_DIR}
 LOG_BASE=${LOG_DIR}
 EOF
 
-# 配置系统的logrotate
-cat <<EOF > /etc/logrotate.d/rabbitmq-server
-$LOG_DIR/*.log {
-    daily
-    missingok
-    rotate 14
-    size 100M
-    compress
-    notifempty
-    sharedscripts
-    postrotate
-        /bin/kill -SIGUSR1 \`cat $DATA_DIR/${NODE_NAME}.pid 2> /dev/null\` 2> /dev/null || true
-    endscript
-}
+# 生成rabbitmq配置文件
+cat <<"EOF" > /etc/rabbitmq/rabbitmq.conf
+# 当日志文件达到 10 MB 时触发轮转
+log.file.rotation.size = 10485760
+# 最当前日志文件外，最多保留 10 个日志文件
+log.file.rotation.count = 10
+# 新增网络分区处理
+cluster_partition_handling = autoheal
+net_ticktime = 120
 EOF
+
+# 配置系统的logrotate
+# cat <<EOF > /etc/logrotate.d/rabbitmq-server
+# $LOG_DIR/*.log {
+#     daily
+#     missingok
+#     rotate 14
+#     size 100M
+#     compress
+#     notifempty
+#     sharedscripts
+#     endscript
+# }
+# EOF
 
 # 如果nodename包含period，那么增加USE_LONGNAME的参数
 if [[ $NODE_NAME =~ \. ]]; then
     echo "USE_LONGNAME=true" >> /etc/rabbitmq/rabbitmq-env.conf 
 fi
 
-# 开启management的插件
-rabbitmq-plugins --longnames --offline enable rabbitmq_management
+if docker ps -a | awk '{print $NF}' | grep -wq "rabbitmq"; then
+  log "检测到已存在的rabbitmq,删除"
+  docker rm -f rabbitmq
+fi
 
+touch /etc/rabbitmq/rabbitmq.conf
+
+# 启动rabbitmq
+docker run -d \
+    --name=rabbitmq \
+    --net=host \
+    --ulimit nofile=102400:102400 \
+    --env-file /etc/rabbitmq/rabbitmq-env.conf \
+    -v /etc/rabbitmq:/etc/rabbitmq \
+    -v ${DATA_DIR}:${DATA_DIR} \
+    -v ${LOG_DIR}:${LOG_DIR} \
+    -v /var/lib/rabbitmq/:/var/lib/rabbitmq/ \
+    $RABBITMQ_IMAGE
+
+# 开启management的插件
+docker exec rabbitmq rabbitmq-plugins --longnames --offline enable rabbitmq_management
+log "等待rabbitmq启动"
+docker exec rabbitmq rabbitmqctl await_startup
+log "rabbitmq启动成功"
 # 启动rabbitmq-server
-systemctl enable --now rabbitmq-server 
+# systemctl enable --now rabbitmq-server 
 
 # 删除默认的guest用户
-rabbitmqctl delete_user guest
+docker exec rabbitmq rabbitmqctl delete_user guest
 
 # 增加管理员账户
-rabbitmqctl add_user "$ADMIN_USER" "$ADMIN_PASSWORD"
-rabbitmqctl set_user_tags "$ADMIN_USER" administrator
+docker exec rabbitmq rabbitmqctl add_user "$ADMIN_USER" "$ADMIN_PASSWORD"
+docker exec rabbitmq rabbitmqctl set_user_tags "$ADMIN_USER" administrator

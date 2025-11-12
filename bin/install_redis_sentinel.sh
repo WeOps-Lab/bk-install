@@ -18,6 +18,7 @@ SENTINEL_PASSWORD=
 NAME=default
 MASTER_NAME=mymaster
 QUORUM=2
+source /data/install/weops_version
 
 usage () {
     cat <<EOF
@@ -142,10 +143,10 @@ if (( EXITCODE > 0 )); then
     usage_and_exit "$EXITCODE"
 fi
 
-# 安装redis
-if ! rpm -ql redis &>/dev/null; then
-    yum -q -y install redis-${REDIS_VERSION}
-fi
+# # 安装redis
+# if ! rpm -ql redis &>/dev/null; then
+#     yum -q -y install redis-${REDIS_VERSION}
+# fi
 
 # 生成 redis-sentinel 配置文件
 CONF_NAME=sentinel-${NAME}.conf
@@ -181,18 +182,49 @@ sentinel deny-scripts-reconfig yes
 EOF
 fi
 
-chown redis.redis /etc/redis/"${CONF_NAME}"
+chown 999:999 /etc/redis/"${CONF_NAME}"
+if docker ps -a | awk '{print $NF}' | grep -wq redis-sentinel-"$NAME"; then
+  log "检测到已存在的redis-sentinel,删除"
+  docker rm -f redis-sentinel-"$NAME"
+fi
 
 log "启动Redis-sentinel "
-systemctl start "$SERVICE_NAME"
+docker run -d --name redis-sentinel-"$NAME" \
+    --restart always \
+    --net=host \
+    -v /etc/redis:/etc/redis \
+    -v /var/log/redis:/var/log/redis \
+    --health-cmd="redis-cli -h ${BIND_ADDR} -p ${PORT} ping" \
+    $REDIS_IMAGE redis-sentinel /etc/redis/"${CONF_NAME}"
 
-log "检查redis-sentinel 状态"
-if ! systemctl status "$SERVICE_NAME"; then
-    log "请检查启动日志，使用命令：journalctl -u $SERVICE_NAME 查看失败原因"
-    log "手动修复后，使用命令：systemctl start $SERVICE_NAME 启动并确认是否启动成功"
-    log "启动成功后，使用命令：systemctl enable $SERVICE_NAME 设置开机启动"
-    exit 100
-else
-    log "设置Redis Sentinel实例开机启动"
-    systemctl enable "$SERVICE_NAME"
-fi
+while true; do
+    # 获取容器健康状态
+    STATUS=$(docker inspect --format='{{.State.Health.Status}}' "redis-sentinel-${NAME}")
+    # 判断状态
+    if [[ "${STATUS}" == "healthy" ]]; then
+        echo "Redis container 'redis-sentinel-${NAME}' is healthy and ready to use!"
+        break
+    elif [[ "${STATUS}" == "unhealthy" ]]; then
+        error "Warning: Redis container 'redis-sentinel-${NAME}' is unhealthy."
+        exit 1
+    else
+        echo "Current status: ${STATUS}. Waiting..."
+    fi
+    
+    # 等待5秒后重新检查
+    sleep 5
+done
+
+# log "启动Redis-sentinel "
+# systemctl start "$SERVICE_NAME"
+
+# log "检查redis-sentinel 状态"
+# if ! systemctl status "$SERVICE_NAME"; then
+#     log "请检查启动日志，使用命令：journalctl -u $SERVICE_NAME 查看失败原因"
+#     log "手动修复后，使用命令：systemctl start $SERVICE_NAME 启动并确认是否启动成功"
+#     log "启动成功后，使用命令：systemctl enable $SERVICE_NAME 设置开机启动"
+#     exit 100
+# else
+#     log "设置Redis Sentinel实例开机启动"
+#     systemctl enable "$SERVICE_NAME"
+# fi

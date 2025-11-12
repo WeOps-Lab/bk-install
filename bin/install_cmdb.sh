@@ -268,7 +268,7 @@ $LOG_DIR/*.stdout.log {
     endscript
 }
 EOF
-systemctl restart rsyslog
+#systemctl restart rsyslog
 
 chown -R blueking.blueking "$PREFIX/cmdb" "$LOG_DIR"
 

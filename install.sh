@@ -10,9 +10,14 @@ set -e
 
 install_nfs () {
     emphasize "install nfs on host: ${BK_NFS_IP_COMMA}"
-    "${SELF_DIR}"/pcmd.sh -m nfs "${CTRL_DIR}/bin/install_nfs.sh -d ${INSTALL_PATH}/public/nfs"
-    emphasize "sign host as module"
-    pcmdrc "${BK_NFS_IP_COMMA}" "_sign_host_as_module nfs"
+    if [[ ! -z "${BK_NFS_IP_COMMA}" ]]; then
+        "${SELF_DIR}"/pcmd.sh -m nfs "${CTRL_DIR}/bin/install_nfs.sh -d ${INSTALL_PATH}/public/nfs"
+        emphasize "sign host as module"
+        pcmdrc "${BK_NFS_IP_COMMA}" "_sign_host_as_module nfs"
+    else
+        emphasize "no nfs host"
+    fi
+
 }
 
 install_yum () {
@@ -24,7 +29,7 @@ install_yum () {
     "${SELF_DIR}"/bin/install_yum.sh -P "${HTTP_PORT}" -p /opt/yum -python "${PYTHON_PATH}"
     emphasize "add or update repo on host: ${ALL_IP_COMMA}"
     "${SELF_DIR}"/pcmd.sh -m ALL "'${SELF_DIR}'/bin/setup_local_yum.sh -l http://$LAN_IP:${HTTP_PORT} -a"
-    "${SELF_DIR}"/pcmd.sh -m ALL "yum makecache"
+    "${SELF_DIR}"/pcmd.sh -m ALL "apt update"
     emphasize "sign host as module"
     pcmdrc "${LAN_IP}" "_sign_host_as_module yum"
     # special: 蓝鲸业务中控机模块标记
@@ -147,12 +152,12 @@ install_kafka () {
     local zk_port=${_project_port["zk,default"]}
     local consul=${_project_consul["kafka,default"]}
     # 同步java8安装包
-    emphasize "sync java8.tgz  to kafka host: ${BK_KAFKA_IP_COMMA}"
-    "${SELF_DIR}"/sync.sh "${module}" "${BK_PKG_SRC_PATH}/java8.tgz" "${BK_PKG_SRC_PATH}/"
+    # emphasize "sync java8.tgz  to kafka host: ${BK_KAFKA_IP_COMMA}"
+    # "${SELF_DIR}"/sync.sh "${module}" "${BK_PKG_SRC_PATH}/java8.tgz" "${BK_PKG_SRC_PATH}/"
 
-    # KAFKA服务器安装JAVA依赖
-    emphasize "install java on host: ${BK_KAFKA_IP_COMMA}"
-    "${SELF_DIR}"/pcmd.sh -m "${module}" "${CTRL_DIR}/bin/install_java.sh -p '${INSTALL_PATH}' -f '${BK_PKG_SRC_PATH}'/java8.tgz"
+    # # KAFKA服务器安装JAVA依赖
+    # emphasize "install java on host: ${BK_KAFKA_IP_COMMA}"
+    # "${SELF_DIR}"/pcmd.sh -m "${module}" "${CTRL_DIR}/bin/install_java.sh -p '${INSTALL_PATH}' -f '${BK_PKG_SRC_PATH}'/java8.tgz"
 
     # 部署 kafka
     emphasize "install kafka on host: ${BK_KAFKA_IP_COMMA}"
@@ -176,32 +181,83 @@ install_mysql_common () {
 _install_mysql () {
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py  -s -P ${SELF_DIR}/bin/default/port.yaml)
     projects=${_projects["mysql"]}
-        # 安装 mysql
-    local mysql_ip=$BK_MYSQL_IP0
-    if ! grep "${mysql_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep "BK_MYSQL_.*_IP_COMMA" >/dev/null; then
-        emphasize "install mysql on host: ${mysql_ip}"
-        "${CTRL_DIR}"/pcmd.sh -H "${mysql_ip}" "${CTRL_DIR}/bin/install_mysql.sh -n 'default' -P ${_project_port["mysql,default"]} -p '$BK_MYSQL_ADMIN_PASSWORD' -d '${INSTALL_PATH}'/public/mysql -l '${INSTALL_PATH}'/logs/mysql -b \$LAN_IP -i"
-        # # mysql机器配置login-path
-        emphasize "set mysql login path 'default-root' on host: ${mysql_ip}"
-        # TODO: 使用pcmd时会出现意想不到的bug，可能和tty allocation有关，待定位，临时用原生ssh代替
-        ssh "${mysql_ip}" "$CTRL_DIR/bin/setup_mysql_loginpath.sh -n 'default-root' -h '/var/run/mysql/default.mysql.socket' -u 'root' -p '$BK_MYSQL_ADMIN_PASSWORD'"
-        for project in ${projects[@]}; do
-           target_ip=BK_MYSQL_${project^^}_IP_COMMA
-           if [[ -z ${!target_ip} ]]; then 
-               # 中控机配置login-path
-               emphasize "set mysql login path ${_project_consul["mysql,${project}"]} on host: 中控机"
-               "${SELF_DIR}"/bin/setup_mysql_loginpath.sh -n "${_project_consul["mysql,${project}"]}" -h "${mysql_ip}" -u "root" -p "$BK_MYSQL_ADMIN_PASSWORD"
-           fi
-        done
-        emphasize "register mysql consul on host: ${mysql_ip}"
-        reg_consul_svc "${_project_consul["mysql,default"]}" "${_project_port["mysql,default"]}" "${mysql_ip}"
-
-        # 中控机配置 default login-path
-        emphasize "set mysql ${_project_consul["mysql,default"]} login path on host: 中控机"
-        "${SELF_DIR}"/bin/setup_mysql_loginpath.sh -n "${_project_consul["mysql,default"]}" -h "${mysql_ip}" -u "root" -p "$BK_MYSQL_ADMIN_PASSWORD"
+    # 安装 mysql
+    # count_master=$(cat install.config |grep mysql |grep master |wc -l)
+    count_master=$(cat install.config | grep 'mysql(master)' |wc -l)
+    if ! [ -z "${BK_MYSQL_SLAVE_IP_COMMA}" ];then
+            if is_string_in_array "${BK_MYSQL_MASTER_IP_COMMA}" "${BK_MYSQL_SLAVE_IP[@]}";then
+                    err "mysql(master) mysql(slave) 不可部署在同一台服务器"
+            fi
     fi
-    emphasize "sign host as module"
-    pcmdrc mysql "_sign_host_as_module mysql"
+    if [ $count_master -gt 1 ]; then
+            echo "mysql(master)只能部署一个。"
+            exit 1
+    else
+            # master_ip=`cat install.config | grep mysql | grep master | awk '{print $1}'`
+            master_ip=`cat install.config | grep 'mysql(master)' | awk '{print $1}'`
+            if [ -n "$master_ip" ];then
+                    mysql_ip=$BK_MYSQL_MASTER_IP0
+            else
+                    mysql_ip=$BK_MYSQL_IP0
+            fi
+            emphasize "install mysql on host: ${mysql_ip}"
+            "${CTRL_DIR}"/pcmd.sh -H "${mysql_ip}" "${CTRL_DIR}/bin/install_mysql.sh -n 'default' -P ${_project_port["mysql,default"]} -p '$BK_MYSQL_ADMIN_PASSWORD' -d '${INSTALL_PATH}'/public/mysql -l '${INSTALL_PATH}'/logs/mysql -b \$LAN_IP -i"
+            ## mysql机器配置login-path
+            emphasize "set mysql login path 'default-root' on host: ${mysql_ip}"
+            # TODO: 使用pcmd时会出现意想不到的bug，可能和tty allocation有关，待定位，临时用原生ssh代替
+            ssh "${mysql_ip}" "$CTRL_DIR/bin/setup_mysql_loginpath.sh -n 'default-root' -h '/var/run/mysql/default.mysql.socket' -u 'root' -p '$BK_MYSQL_ADMIN_PASSWORD'"
+            for project in ${projects[@]}; do
+               target_ip=BK_MYSQL_${project^^}_IP_COMMA
+               if [[ -z ${!target_ip} ]]; then 
+                   # 中控机配置login-path
+                   emphasize "set mysql login path ${_project_consul["mysql,${project}"]} on host: 中控机"
+                   "${SELF_DIR}"/bin/setup_mysql_loginpath.sh -n "${_project_consul["mysql,${project}"]}" -h "${mysql_ip}" -u "root" -p "$BK_MYSQL_ADMIN_PASSWORD"
+               fi
+            done
+            emphasize "register mysql consul on host: ${mysql_ip}"
+            reg_consul_svc "${_project_consul["mysql,default"]}" "${_project_port["mysql,default"]}" "${mysql_ip}"
+            for project in ${_projects["mysql"]}; do
+                    reg_consul_svc "${_project_consul["mysql,${project}"]}" "${_project_port["mysql,${project}"]}" "${mysql_ip}"
+            done
+
+            # 中控机配置 default login-path
+            emphasize "set mysql ${_project_consul["mysql,default"]} login path on host: 中控机"
+            "${SELF_DIR}"/bin/setup_mysql_loginpath.sh -n "${_project_consul["mysql,default"]}" -h "${mysql_ip}" -u "root" -p "$BK_MYSQL_ADMIN_PASSWORD"
+        emphasize "sign host as module"
+        pcmdrc mysql "_sign_host_as_module mysql_master"
+    fi
+
+    # 安装slave mysql
+    count_slave=$(cat install.config |grep 'mysql(slave)' |wc -l)
+    if [ $count_slave -gt 2 ]; then
+            echo "mysql(slave)最多支持部署2台。"
+            exit 1
+    else
+            mysql_slave_ip=$(cat install.config | grep 'mysql(slave)' | awk '{print $1}')
+            if [ -n "$mysql_slave_ip" ]; then
+                    emphasize "install slave_mysql on host:"
+                    for ip in ${mysql_slave_ip}; do
+                            echo "${ip}"
+                    done
+
+                    "${CTRL_DIR}"/pcmd.sh -m mysql_slave "${CTRL_DIR}/bin/install_mysql.sh -n 'default' -P ${_project_port["mysql,default"]} -p '$BK_MYSQL_ADMIN_PASSWORD' -d '${INSTALL_PATH}'/public/mysql -l '${INSTALL_PATH}'/logs/mysql -b \$LAN_IP -i"
+                    if [ -n "$mysql_slave_ip" ]; then
+                            emphasize "set mysql login path 'default-root' on host:"
+                            for ip in ${mysql_slave_ip}; do
+                                    echo "${ip}"
+                            done
+                    fi  
+                    # TODO: 使用pcmd时会出现意想不到的bug，可能和tty allocation有关，待定位，临时用原生ssh代替
+                    for ip in ${mysql_slave_ip};do
+                            ssh "$ip" "$CTRL_DIR/bin/setup_mysql_loginpath.sh -n 'default-root' -h '/var/run/mysql/default.mysql.socket' -u 'root' -p '$BK_MYSQL_ADMIN_PASSWORD'"
+                            emphasize "register mysql consul on host:"
+                            echo "$ip"
+                    done
+                    pcmdrc mysql "_sign_host_as_module mysql_slave"
+                    # 配置主从
+                    bash ./configure_mysql_master-slave.sh
+            fi
+    fi
 }
 
 install_redis_common () {
@@ -213,10 +269,22 @@ _install_redis () {
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
     if [ -z  "${project}" ]; then
         for redis_ip in "${BK_REDIS_IP[@]}"; do
-            if ! grep "${redis_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep -v "CLUSTER" | grep "BK_REDIS_.*_IP_COMM" >/dev/null; then
+            # 仅redis master节点执行动作
+            if [[ $redis_ip == $BK_REDIS_MASTER_IP ]]; then
+                emphasize "install redis master on host: ${redis_ip}"
                 "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis.sh -n '${_project_name["redis,default"]}' -p '${_project_port["redis,default"]}' -a '${BK_REDIS_ADMIN_PASSWORD}' -b \$LAN_IP"
                 emphasize "register ${_project_consul["redis,default"]} on host $redis_ip"
                 reg_consul_svc "${_project_consul["redis,default"]}" "${_project_port["redis,default"]}" "${redis_ip}"
+                continue
+            else
+                emphasize "install redis slave on host: ${redis_ip}"
+                "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis.sh -n '${_project_name["redis,default"]}' -p '${_project_port["redis,default"]}' -a '${BK_REDIS_ADMIN_PASSWORD}' -b \$LAN_IP"
+                emphasize "dont register ${_project_consul["redis,default"]} slave on host $redis_ip"
+            fi
+            if ! grep "${redis_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep -v "CLUSTER" | grep "BK_REDIS_.*_IP_COMM" >/dev/null; then
+                "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis.sh -n '${_project_name["redis,default"]}' -p '${_project_port["redis,default"]}' -a '${BK_REDIS_ADMIN_PASSWORD}' -b \$LAN_IP"
+                emphasize "register ${_project_consul["redis,default"]} on host $redis_ip"
+                # reg_consul_svc "${_project_consul["redis,default"]}" "${_project_port["redis,default"]}" "${redis_ip}"
             fi
         done
     fi
@@ -240,7 +308,7 @@ install_rabbitmq () {
         emphasize "setup rabbitmq cluster on host: ${BK_RABBITMQ_IP_COMMA}"
         "${CTRL_DIR}"/pcmd.sh -m "${module}" "${CTRL_DIR}/bin/setup_rabbitmq_cluster.sh -e '$BK_RABBITMQ_ERLANG_COOKIES'"
         # 重新注册用户，兼容setup rabbitmq cluster 的时候reset 
-        "${CTRL_DIR}"/pcmd.sh -H "${BK_RABBITMQ_IP0}" "rabbitmqctl delete_user guest;rabbitmqctl add_user '$BK_RABBITMQ_ADMIN_USER' '$BK_RABBITMQ_ADMIN_PASSWORD';rabbitmqctl set_user_tags '$BK_RABBITMQ_ADMIN_USER' administrator"
+        "${CTRL_DIR}"/pcmd.sh -H "${BK_RABBITMQ_IP0}" "docker exec rabbitmq rabbitmqctl delete_user guest;docker exec rabbitmq rabbitmqctl add_user '$BK_RABBITMQ_ADMIN_USER' '$BK_RABBITMQ_ADMIN_PASSWORD';docker exec rabbitmq rabbitmqctl set_user_tags '$BK_RABBITMQ_ADMIN_USER' administrator"
     fi
 
     # 注册consul
@@ -281,8 +349,8 @@ install_redis_sentinel_common () {
         emphasize "set redis master/slave"
         for node in "${BK_REDIS_SENTINEL_IP[@]}"; do
             if ! [[ $node == "${BK_REDIS_SENTINEL_IP0}" ]]; then
-                "${CTRL_DIR}"/pcmd.sh  -H "$node" "redis-cli -a '$redis_single_passwd'  -p '$redis_single_port' -h \$LAN_IP slaveof ${BK_REDIS_SENTINEL_IP[0]} $redis_single_port"
-                "${CTRL_DIR}"/pcmd.sh  -H "$node" "redis-cli -a '$redis_single_passwd'  -p '$redis_single_port' -h \$LAN_IP config rewrite"
+                "${CTRL_DIR}"/pcmd.sh  -H "$node" "docker exec redis-mymaster redis-cli -a '$redis_single_passwd'  -p '$redis_single_port' -h \$LAN_IP slaveof ${BK_REDIS_SENTINEL_IP[0]} $redis_single_port"
+                "${CTRL_DIR}"/pcmd.sh  -H "$node" "docker exec redis-mymaster redis-cli -a '$redis_single_passwd'  -p '$redis_single_port' -h \$LAN_IP config rewrite"
             fi
         done
     fi
@@ -309,12 +377,12 @@ install_zk () {
     local port=${_project_port["zk,default"]}
     local consul=${_project_consul["zk,default"]}
     # 同步java8安装包
-    emphasize "sync java8.tgz  to zk host: ${BK_ZK_IP_COMMA}"
-    "${SELF_DIR}"/sync.sh "${module}" "${BK_PKG_SRC_PATH}/java8.tgz" "${BK_PKG_SRC_PATH}/"
+    # emphasize "sync java8.tgz  to zk host: ${BK_ZK_IP_COMMA}"
+    # "${SELF_DIR}"/sync.sh "${module}" "${BK_PKG_SRC_PATH}/java8.tgz" "${BK_PKG_SRC_PATH}/"
 
     # # ZK服务器安装JAVA
-    emphasize "install java on host: ${BK_ZK_IP_COMMA}"
-    "${SELF_DIR}"/pcmd.sh -m "${module}" "${CTRL_DIR}/bin/install_java.sh -p '${INSTALL_PATH}' -f '${BK_PKG_SRC_PATH}'/java8.tgz"
+    # emphasize "install java on host: ${BK_ZK_IP_COMMA}"
+    # "${SELF_DIR}"/pcmd.sh -m "${module}" "${CTRL_DIR}/bin/install_java.sh -p '${INSTALL_PATH}' -f '${BK_PKG_SRC_PATH}'/java8.tgz"
     
     # 部署ZK
     emphasize "install zk on host: ${BK_ZK_IP_COMMA}"
@@ -487,7 +555,7 @@ install_ssm () {
     for project in ${projects[@]}; do
         emphasize "install ${target_name}-${project} on host: ${BK_SSM_IP_COMMA}"
         "${SELF_DIR}"/pcmd.sh -H "${_project_ip["${target_name},${project}"]}" \
-                 "${CTRL_DIR}/bin/install_bkssm.sh -e '${CTRL_DIR}/bin/04-final/bkssm.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
+                "${CTRL_DIR}/bin/install_bkssm.sh -e '${CTRL_DIR}/bin/04-final/bkssm.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
         emphasize "register  ${consul} consul server  on host: ${BK_SSM_IP_COMMA}"
         reg_consul_svc "${_project_consul[${target_name},${project}]}"  "${_project_port[${target_name},${project}]}"  "${_project_ip[${target_name},${project}]}"
     done
@@ -507,7 +575,7 @@ install_auth () {
     for project in ${projects[@]}; do
         emphasize "install ${target_name}-${project} on host: ${BK_SSM_IP_COMMA}"
         "${SELF_DIR}"/pcmd.sh -m $module \
-                 "${CTRL_DIR}/bin/install_bkauth.sh -e '${CTRL_DIR}/bin/04-final/bkauth.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
+                "${CTRL_DIR}/bin/install_bkauth.sh -e '${CTRL_DIR}/bin/04-final/bkauth.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP"
         emphasize "register  ${consul} consul server  on host: ${BK_AUTH_IP_COMMA}"
         reg_consul_svc "${_project_consul[${target_name},${project}]}"  "${_project_port[${target_name},${project}]}"  "${_project_ip[${target_name},${project}]}"
     done
@@ -543,7 +611,7 @@ _install_cmdb_project () {
         for project in ${project[@]}; do
             emphasize "install ${module}-${project} on host: $module"
             "${SELF_DIR}"/pcmd.sh -H "${_project_ip["${target_name},${project}"]}" \
-                     "${CTRL_DIR}/bin/install_cmdb.sh -e '${CTRL_DIR}/bin/04-final/cmdb.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -m '${project}'"
+                    "${CTRL_DIR}/bin/install_cmdb.sh -e '${CTRL_DIR}/bin/04-final/cmdb.env' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -m '${project}'"
         done
     fi
     emphasize "start bk-cmdb.target on host: ${module}"
@@ -594,6 +662,12 @@ _install_paas_project () {
             reg_consul_svc "${project_consul}" "${project_port}" "$ip"
         done
     done
+
+    # 挂载nfs
+    if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
+        emphasize "mount nfs to host: $BK_NFS_IP0"
+        pcmdrc ${module} "_mount_shared_nfs open_paas"
+    fi
 
     # 注册白名单
     emphasize "add or update appcode: $BK_PAAS_APP_CODE"
@@ -796,6 +870,12 @@ install_appo () {
     # 安装openresty
     emphasize "install openresty on host: ${BK_APPO_IP_COMMA}"
     "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_openresty.sh -p ${INSTALL_PATH} -d ${CTRL_DIR}/support-files/templates/nginx/"
+
+    # nfs
+    if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
+        emphasize "mount nfs to host: $BK_NFS_IP0"
+        pcmdrc ${module} "_mount_shared_nfs ${module}"
+    fi
     
     emphasize "install consul-template on host: ${BK_APPO_IP_COMMA}"
     install_consul_template "paasagent" "${BK_APPO_IP_COMMA}"
@@ -898,6 +978,12 @@ _install_job_backend () {
     emphasize "Registration authority model for ${module}"
     bkiam_migrate ${module}
 
+    # nfs
+    if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
+        emphasize "mount nfs to host: ${BK_NFS_IP0}"
+        pcmdrc job "_mount_shared_nfs job"
+    fi
+
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
 }
@@ -919,7 +1005,7 @@ install_usermgr () {
         for ip in "${BK_USERMGR_IP[@]}"; do
             emphasize "install ${module} ${project} on host: ${BK_USERMGR_IP_COMMA} "
             "${SELF_DIR}"/pcmd.sh -H "${ip}" \
-                     "${CTRL_DIR}/bin/install_usermgr.sh -e ${CTRL_DIR}/bin/04-final/usermgr.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH} --python-path ${python_path}"
+                    "${CTRL_DIR}/bin/install_usermgr.sh -e ${CTRL_DIR}/bin/04-final/usermgr.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH} --python-path ${python_path}"
             reg_consul_svc "${_project_consul[${target_name},${project}]}" "${_project_port[${target_name},${project}]}" "${ip}"
         done
     done
@@ -962,7 +1048,7 @@ install_saas () {
 
             _install_saas $env $app_code $pkg_name
             assert " SaaS application $app_code has been deployed successfully" "Deploy saas $app_code failed."
-            # set_console_desktop ${app_code}
+            #set_console_desktop ${app_code}
         done
     else
         all_app=( $(_find_all_saas) )
@@ -973,7 +1059,7 @@ install_saas () {
         for app_code in $(_find_all_saas); do
             _install_saas "$env" "$app_code" $(_find_latest_one "$app_code")
             assert " SaaS application $app_code has been deployed successfully" "Deploy saas $app_code failed."
-            # set_console_desktop ${app_code}
+            #set_console_desktop ${app_code}
         done
     fi
 }
@@ -1036,9 +1122,7 @@ _install_bkmonitor () {
            emphasize "register ${_project_consul[${target_name},${project}]} consul on host: ${_project_ip[${target_name},${project}]}"
            reg_consul_svc ${_project_consul[${target_name},${project}]}  ${_project_port[${target_name},${project}]} ${_project_ip[${target_name},${project}]}
         fi
-
     done
-
 }
 
 install_paas_plugins () {
@@ -1070,8 +1154,6 @@ install_nodeman () {
     local target_name=$(map_module_name $module)
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -p ${BK_PKG_SRC_PATH}/${target_name}/projects.yaml -P ${SELF_DIR}/bin/default/port.yaml)
     local projects=${_projects["${module}"]}
-    emphasize "install docker on host: ${module}"
-    "${SELF_DIR}"/pcmd.sh -m ${module}  "${CTRL_DIR}/bin/install_docker_for_paasagent.sh"
     emphasize "grant rabbitmq private for ${module}"
     grant_rabbitmq_pri $module
     # 注册app_code
@@ -1101,6 +1183,12 @@ install_nodeman () {
     # openresty 服务器上安装consul-template
     emphasize "install consul template on host: ${module}"
     install_consul_template ${module} "${BK_NODEMAN_IP_COMMA}"
+
+    # nfs
+    if [[ ! -z ${BK_NFS_IP_COMMA} ]]; then
+        emphasize "mount nfs to host: ${BK_NFS_IP0}"
+        pcmdrc ${module} "_mount_shared_nfs bknodeman"
+    fi
 
     emphasize "sign host as module"
     pcmdrc ${module} "_sign_host_as_module ${module}"
@@ -1193,8 +1281,8 @@ install_bklog () {
             fi
             emphasize "register ${_project_consul[${target_name},${project}]}  consul on host: ${ip}"
             reg_consul_svc "${_project_consul[${target_name},${project}]}" "${_project_port[${target_name},${project}]}" "${ip}"
-            emphasize "sign host as module"
-            pcmdrc "${ip}" "_sign_host_as_module bk${module}-${project}"
+    	    emphasize "sign host as module"
+    	    pcmdrc "${ip}" "_sign_host_as_module bk${module}-${project}"
         done
     done
 }
@@ -1246,7 +1334,7 @@ install_lesscode () {
     pcmdrc nginx "_sign_host_as_module consul-template"
     
     emphasize "set bk_lesscode as desktop display by default"
-    set_console_desktop "bk_lesscode"
+    #set_console_desktop "bk_lesscode"
 }
 
 install_bkapi () {
@@ -1264,11 +1352,217 @@ install_bkapi () {
 
 }
 
+install_weopsconsul () {
+    local module=weopsconsul
+    emphasize "install init weopsconsul on host: ${BK_WEOPSCONSUL_INIT_IP}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_WEOPSCONSUL_INIT_IP}" "${CTRL_DIR}/bin/install_weops_consul.sh -i -k ${WEOPS_CONSUL_KEYSTR_32BYTES} -b ${BK_WEOPSCONSUL_INIT_IP}"
+    emphasize "install weopsconsul on host: ${BK_WEOPSCONSUL_IP_COMMA}"
+    for ip in ${BK_WEOPSCONSUL_IP[@]}; do
+        if [[ $ip == ${BK_WEOPSCONSUL_INIT_IP} ]]; then
+            emphasize "skip install weopsconsul on host: ${ip}"
+            continue
+        fi
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_consul.sh -b ${ip} -k ${WEOPS_CONSUL_KEYSTR_32BYTES} -j ${BK_WEOPSCONSUL_INIT_IP}"
+    done
+}
+
+install_prometheus () {
+    local module=prometheus
+    # 如果没有prometheus master节点，退出并提示
+    if [[ ${#BK_PROMETHEUS_MASTER_IP[@]} -eq 0 ]]; then
+        err "prometheus 节点数为0,不支持"
+    fi
+    emphasize "install prometheus master on host: ${ip}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_PROMETHEUS_MASTER_IP}" "${CTRL_DIR}/bin/install_prometheus.sh" -a "${WEOPS_PROMETHEUS_PASSWORD}" -u '${WEOPS_PROMETHEUS_USER}' -s "${WEOPS_PROMETHEUS_SECRET_BASE64}" -b "${BK_PROMETHEUS_MASTER_IP}" -m true
+    emphasize "install prometheus slave on host: ${BK_PROMETHEUS_SLAVE_IP}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_PROMETHEUS_SLAVE_IP}" "${CTRL_DIR}/bin/install_prometheus.sh" -a "${WEOPS_PROMETHEUS_PASSWORD}" -u '${WEOPS_PROMETHEUS_USER}' -s "${WEOPS_PROMETHEUS_SECRET_BASE64}" -b "${BK_PROMETHEUS_SLAVE_IP}" -m false
+    for ip in ${BK_NGINX_IP[@]}; do
+        emphasize "install prometheus nginx on host: ${ip}"
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_prometheus_nginx.sh -m ${BK_PROMETHEUS_MASTER_IP} -s ${BK_PROMETHEUS_SLAVE_IP}"
+    done
+}
+
+install_echart () {
+    local module=echarts
+    emphasize "install echarts on host: ${BK_ECHARTS_IP_COMMA}"
+    for ip in ${BK_ECHARTS_IP[@]}; do
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "docker rm -f echart || echo container echart does not exist ;docker run -d --restart=always --net=host --name=repo.service.consul:8181/ssr-echarts:latest"
+        reg_consul_svc echart 3000 "${ip}"
+    done
+}
+
+install_vault () {
+    local module=vault
+    emphasize "create database for vault"
+    mysql --login-path=mysql-default -e "CREATE DATABASE IF NOT EXISTS vault;"
+    emphasize "grant mysql privilege for vault"
+    ssh $BK_MYSQL_MASTER_IP "mysql --login-path=default-root -e \"GRANT ALL PRIVILEGES ON *.* TO 'root'@\"${BK_VAULT_INIT_IP}\" IDENTIFIED BY \"${BK_MYSQL_ADMIN_PASSWORD}\";"
+    emphasize "install vault init node on host: ${BK_VAULT_INIT_IP}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_VAULT_INIT_IP}" "${CTRL_DIR}/bin/install_weops_vault.sh -i -s mysql-default.service.consul -p ${BK_MYSQL_ADMIN_PASSWORD} -P 3306 -u ${BK_MYSQL_ADMIN_USER}"
+    reg_consul_svc vault 8200 "${BK_VAULT_INIT_IP}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_VAULT_INIT_IP}" "cat /data/vault.secret" > /data/vault.secret
+    if [[ ! -f "${SELF_DIR}"/bin/04-final/vault.env ]]; then
+        echo VAULT_UNSEAL_CODE=$(cat /data/vault.secret|grep 'Unseal Key'|awk '{print $4}') > "${SELF_DIR}"/bin/04-final/vault.env
+        echo VAULT_ROOT_TOKEN=$(cat /data/vault.secret|grep 'Initial Root Token'|awk '{print $4}') >> "${SELF_DIR}"/bin/04-final/vault.env
+        emphasize "vault unseal code: $(cat /data/vault.secret|grep 'Unseal Key'|awk '{print $4}')"
+    else
+        emphasize "vault already init, skip."
+    fi
+    emphasize "install vault on host: ${BK_VAULT_IP_COMMA}"
+    for ip in ${BK_VAULT_IP[@]}; do
+        if [[ $ip == ${BK_VAULT_INIT_IP} ]]; then
+            emphasize "skip install vault on host: ${ip}"
+            continue
+        fi
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_vault.sh -s mysql-default.service.consul -p ${BK_MYSQL_ADMIN_PASSWORD} -P 3306 -u ${BK_MYSQL_ADMIN_USER}"
+        reg_consul_svc vault 8200 "${ip}"
+    done
+}
+
+install_automate () {
+    local module=automate
+    emphasize "install automate on host: ${BK_AUTOMATE_IP_COMMA}"
+    for ip in ${BK_AUTOMATE_IP[@]}; do
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_automate.sh -b ${ip} -w http://prometheus.service.consul/api/v1/write -u ${WEOPS_PROMETHEUS_USER} -s ${WEOPS_PROMETHEUS_PASSWORD} -r redis.service.consul -P 6379 -a ${BK_REDIS_ADMIN_PASSWORD} -v http://vault.service.consul:8200 -t ${VAULT_ROOT_TOKEN}"
+        reg_consul_svc automate 8089 "${ip}"
+    done
+}
+
+install_weopsproxy () {
+    local module=weopsproxy
+    emphasize "install weopsproxy on host: ${BK_WEOPSPROXY_IP_COMMA}"
+    for ip in ${BK_WEOPSPROXY_IP[@]}; do
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_proxy.sh -r http://${WEOPS_PROMETHEUS_USER}:${WEOPS_PROMETHEUS_PASSWORD}@prometheus.service.consul/api/v1/write -c 127.0.0.1:8501" 
+    done
+}
+
+install_weopsrdp () {
+    local module=weopsrdp
+    emphasize "install weopsrdp on host: ${BK_WEOPSRDP_IP_COMMA}"
+    for ip in ${BK_WEOPSRDP_IP[@]}; do
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_rdp.sh -I /o/ -s ${BK_PAAS_PUBLIC_URL}" 
+    done
+    emphasize "update consul kv"
+    docker exec -i bk-consul consul kv put bkapps/upstreams/prod/views "[\"${BK_WEOPSRDP_IP0}:8082\",\"${BK_WEOPSRDP_IP1}:8082 backup\"]"
+    emphasize "reload nginx"
+    "${SELF_DIR}"/pcmd.sh -m nginx 'systemctl reload consul-template && /usr/local/openresty/nginx/sbin/nginx -s reload'
+}
+
+install_minio () {
+    local module=minio
+    emphasize "install minio on host: ${BK_MINIO_IP_COMMA}"
+    minio_server_list=""
+    for ip in "${BK_MINIO_IP[@]}"; do
+        minio_server_list+="http://$ip:9015/data "
+    done
+    minio_server_list=$(echo $minio_server_list | sed 's/ $//')
+    for ip in ${BK_MINIO_IP[@]}; do
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_minio.sh -a ${WEOPS_MINIO_ACCESS_KEY} -s ${WEOPS_MINIO_SECRET_KEY} -l \"${minio_server_list}\""
+        reg_consul_svc minio 9015 "${ip}"
+    done
+    docker exec -i bk-consul consul kv put bkapps/upstreams/prod/minio "[\"${BK_MINIO_IP0}:9015\",\"${BK_MINIO_IP1}:9015\",\"${BK_MINIO_IP2}:9015\",\"${BK_MINIO_IP3}:9015\"]"
+}
+
+install_casbinmesh () {
+    local module=casbinmesh
+    emphasize "install casbinmesh init node on host: ${BK_CASBINMESH_INIT_IP}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_CASBINMESH_INIT_IP}" "${CTRL_DIR}/bin/install_casbin_mesh.sh -i -b ${BK_CASBINMESH_INIT_IP}"
+    emphasize "install casbinmesh on host: ${BK_CASBINMESH_IP_COMMA}"
+    for ip in ${BK_CASBINMESH_IP[@]}; do
+        if [[ $ip == ${BK_CASBINMESH_INIT_IP} ]]; then
+            emphasize "skip install casbinmesh on host: ${ip}"
+            continue
+        fi
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_casbin_mesh.sh -j ${BK_CASBINMESH_INIT_IP} -b ${ip}"
+    done
+}
+
+install_trino () {
+    local module=trino
+    emphasize "install trino on host: ${BK_TRINO_IP_COMMA}"
+    for ip in ${BK_TRINO_IP[@]}; do
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_trino.sh -m \"mongodb://${BK_MONGODB_ADMIN_USER}:${BK_MONGODB_ADMIN_PASSWORD}@mongodb.service.consul:27017/admin?replicaSet=rs0\" -e http://es7.service.consul:9200 -eu elastic -ep ${BK_ES7_ADMIN_PASSWORD} -my jdbc:mysql://mysql-default.service.consul:3306 -mu root -mp ${BK_MYSQL_ADMIN_PASSWORD} -i http://influxdb.service.consul:8086 -iu admin -ip ${BK_INFLUXDB_ADMIN_PASSWORD}"
+        reg_consul_svc trino 8081 "${ip}"
+    done
+}
+
+install_datart () {
+    local module=datart
+    emphasize "install datart init node on host: ${BK_DATART_INIT_IP}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_DATART_INIT_IP}" "${CTRL_DIR}/bin/install_datart.sh -m \"jdbc:mysql://mysql-default.service.consul:3306/datart?&allowMultiQueries=true&characterEncoding=utf-8\" -u root -p \"${BK_MYSQL_ADMIN_PASSWORD}\" -d ${BK_DOMAIN} -i"
+    emphasize "install datart on host: ${BK_DATART_IP_COMMA}"
+    for ip in ${BK_DATART_IP[@]}; do
+        if [[ $ip == ${BK_DATART_INIT_IP} ]]; then
+            emphasize "skip install datart on host: ${ip}"
+            continue
+        fi
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_datart.sh -m \"jdbc:mysql://mysql-default.service.consul:3306/datart?&allowMultiQueries=true&characterEncoding=utf-8\" -u root -p \"${BK_MYSQL_ADMIN_PASSWORD}\" -d ${BK_DOMAIN}"
+        reg_consul_svc datart 8083 "${ip}"
+    done
+    emphasize "update consul kv"
+    consul kv put bkapps/upstreams/prod/datart "[\"${BK_DATART_IP0}:8083\",\"${BK_DATART_IP1}:8083\"]"
+    emphasize "sync static file to control"
+    if [[ -f /data/static.tgz ]]; then
+        emphasize "file already exists, skip"
+    else
+        rsync -avz $BK_DATART_INIT_IP:/tmp/static.tgz /data/
+    fi
+    emphasize "sync static file to paas"
+    tar -xf /data/static.tgz -C /data/src/open_paas/paas/
+    "${SELF_DIR}"/bkcli sync paas
+    "${SELF_DIR}"/bkcli restart paas
+}
+
+install_monstache () {
+    local module=monstache
+    emphasize "install monstache on host: ${BK_MONSTACHE_IP_COMMA}"
+    for ip in ${BK_MONSTACHE_IP[@]}; do
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_monstache.sh -p \"${BK_CMDB_MONGODB_PASSWORD}\" -e \"${BK_ES7_ADMIN_PASSWORD}\""
+    done
+}
+
+install_age () {
+    local module=age
+    emphasize "install age on host: ${BK_AGE_IP0}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_AGE_IP0}" "${CTRL_DIR}/bin/install_age.sh -u \"${WEOPS_AGE_DB_USER}\" -p \"${WEOPS_AGE_DB_PASSWORD}\" -d \"${WEOPS_AGE_DB_NAME}\""
+    reg_consul_svc age 5432 "${BK_AGE_IP0}"
+    emphasize "install age on host: ${BK_AGE_IP1}"
+    "${SELF_DIR}"/pcmd.sh -H "${BK_AGE_IP1}" "${CTRL_DIR}/bin/install_age.sh -u \"${WEOPS_AGE_DB_USER}\" -p \"${WEOPS_AGE_DB_PASSWORD}\" -d \"${WEOPS_AGE_DB_NAME}\""
+}
+
+install_kafkaadapter () {
+    local module=kafkaadapter
+    emphasize "install kafkaadapter on host: ${BK_KAFKAADAPTER_IP_COMMA}"
+    APP_AUTH_TOKEN=$(mysql --login-path=mysql-default -Ne "select auth_token from open_paas.paas_app where code='weops_saas';")
+    if [[ -z ${APP_AUTH_TOKEN} ]]; then
+        emphasize "get app auth token failed"
+        exit 1
+    else
+        for ip in ${BK_KAFKAADAPTER_IP[@]}; do
+            "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_kafka_adapter.sh -u \"${WEOPS_KAFKA_ADAPTER_USER}\" -p \"${WEOPS_KAFKA_ADAPTER_PASSWORD}\" -a \"${APP_AUTH_TOKEN}\""
+        reg_consul_svc kafkaadapter 8086 "${ip}"
+        done
+    fi
+}
+
+install_vector () {
+    local module=vector
+    emphasize "install vector on host: ${BK_VECTOR_IP_COMMA}"
+    for ip in ${BK_VECTOR_IP[@]}; do
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_vector.sh -u \"${WEOPS_PROMETHEUS_USER}\" -p \"${WEOPS_PROMETHEUS_PASSWORD}\" -w \"http://prometheus.service.consul/api/v1/write\""
+    done
+}
+
+all_install_docker () {
+    "${SELF_DIR}"/pcmd.sh -m all "${CTRL_DIR}/bin/install_docker_for_paasagent.sh"
+    emphasize "install docker on host: ${BK_PAAS_IP_COMMA} success"
+}
+
 module=${1:-null}
 shift $(($# >= 1 ? 1 : 0))
 
 case $module in
-    paas|license|cmdb|job|gse|yum|consul|pypi|bkenv|rabbitmq|zk|mongodb|influxdb|license|cert|nginx|usermgr|appo|bklog|es7|python|appt|kafka|beanstalk|fta|dbcheck|controller|lesscode|node|bkapi|apigw|etcd|apisix)
+    paas|license|cmdb|job|gse|yum|consul|pypi|bkenv|rabbitmq|zk|mongodb|influxdb|license|cert|nginx|usermgr|appo|bklog|es7|python|appt|kafka|beanstalk|fta|dbcheck|controller|lesscode|node|bkapi|apigw|etcd|apisix|nfs)
         install_"${module}" $@
         ;;
     paas_plugins)
@@ -1300,6 +1594,54 @@ case $module in
         ;;
     mysql|redis_sentinel|redis)
         install_"${module}"_common "$@"
+        ;;
+    weopsconsul)
+        install_weopsconsul "$@"
+        ;;
+    prometheus)
+        install_prometheus "$@"
+        ;;
+    echart)
+        install_echart "$@"
+        ;;
+    vault)
+        install_vault "$@"
+        ;;
+    automate)
+        install_automate "$@"
+        ;;
+    weopsproxy)
+        install_weopsproxy "$@"
+        ;;
+    weopsrdp)
+        install_weopsrdp "$@"
+        ;;
+    minio)
+        install_minio "$@"
+        ;;
+    casbinmesh)
+        install_casbinmesh "$@"
+        ;;
+    trino)
+        install_trino "$@"
+        ;;
+    datart)
+        install_datart "$@"
+        ;;
+    monstache)
+        install_monstache "$@"
+        ;;
+    age)
+        install_age "$@"
+        ;;
+    kafkaadapter)
+        install_kafkaadapter "$@"
+        ;;
+    vector)
+        install_vector "$@"
+        ;;
+    docker)
+        all_install_docker "$@"
         ;;
     null) # 特殊逻辑，兼容source脚本
         ;;

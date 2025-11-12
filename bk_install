@@ -53,6 +53,7 @@ case $service in
         _bkc sync cert
         _bkc install cert
         _bkc install yum
+        _bkc install nfs
         ./bkcli install controller 1 # 安装EPEL源默认不提供的rpm包
         echo ""
         echo "如果以上步骤执行没有报错, 说明你已经完成蓝鲸部署基础依赖的安装, 请按照文档继续执行剩余步骤"
@@ -65,11 +66,13 @@ case $service in
         _bkc install license
         _bkc install mysql
         _bkc install redis
+        _bkc install redis_sentinel
         _bkc start mysql
         _bkc install nginx
 
         _bkc start license
         _bkc start redis
+        _bkc start redis_sentinel
         _bkc start nginx
 
         _bkc sync bkiam
@@ -216,9 +219,11 @@ case $service in
         _bkc install saas-o bk_nodeman
         _bkc sync nodeman
         _bkc install nodeman
+        _bkc restart nodeman
         echo "等待bknodeman启动成功"
         sleep 10
         _bkc initdata nodeman
+        _bkc start nodeman
         ./bkcli status nodeman
         echo 
         echo "如果以上步骤执行没有报错, 说明你已经完成 $(green_echo 节点管理)的部署, 并请按照文档继续执行剩余步骤"

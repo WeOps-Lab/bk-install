@@ -1,7 +1,7 @@
 set -e
 action_kafka () {
     local action=$1
-    systemctl ${action} kafka.service
+    docker ${action} kafka
 }
 action_paas () {
     local action=$1
@@ -20,7 +20,7 @@ action_usermgr () {
 
 action_consul () {
     local action=$1
-    systemctl ${action} consul.service
+    docker ${action} bk-consul
 }
 
 action_pypi () {
@@ -32,41 +32,41 @@ action_mysql () {
     local action=$1
     local project=$2
     if [[ -z ${project} ]]; then
-        systemctl $action mysql@default.service
+        docker $action mysql
     else
-        systemctl ${action} mysql@${project}.service
+        docker ${action} mysql@${project}
     fi
 }
 
 action_redis_sentinel () {
     local action=$1
-    systemctl ${action} redis-sentinel@default.service
-    systemctl ${action} redis@mymaster.service
+    docker ${action} redis-sentinel-default
+    docker ${action} redis-mymaster
 }
 
 action_redis () {
     local action=$1
     local project=$2
     if [[ -z ${project} ]]; then
-        systemctl $action redis@default.service
+        docker $action redis-default
     else
-        systemctl ${action} redis@${project}.service
+        docker ${action} redis${project}
     fi
 }
 
 action_rabbitmq () {
     local action=$1
-    systemctl ${action} rabbitmq-server.service
+    docker ${action} rabbitmq
 }
 
 action_zk () {
     local action=$1
-    systemctl ${action} zookeeper.service
+    docker ${action} zookeeper
 }
 
 action_mongodb () {
     local action=$1
-    systemctl ${action} mongod.service
+    docker ${action} mongo
 }
 
 action_es7 () {
@@ -76,7 +76,7 @@ action_es7 () {
 
 action_influxdb () {
     local action=$1
-    systemctl ${action} influxdb.service
+    docker ${action} influxdb
 }
 
 action_license () {
@@ -163,12 +163,16 @@ action_usermgr () {
 action_monitorv3 () {
     local action=$1
     local project=$2
-    systemctl ${action} bk-${project}.service
+    if [[ ${project} eq 'monitor' ]];do
+        docker ${action} bk-monitorv3-monitor
+    else
+        systemctl ${action} bk-${project}.service
+    fi
 }
 
 action_nodeman () {
     local action=$1
-    systemctl ${action} bk-nodeman.service
+    docker ${action} bknodeman-nodeman
 }
 
 action_gse () {

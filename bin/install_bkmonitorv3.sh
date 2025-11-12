@@ -13,7 +13,7 @@ SELF_DIR=$(dirname "$(readlink -f "$0")")
 PROGRAM=$(basename "$0")
 VERSION=1.0
 EXITCODE=0
-
+source /data/install/weops_version
 # 全局默认变量
 # 模块安装后所在的上一级目录
 PREFIX=/data/bkee
@@ -27,11 +27,11 @@ PYTHON_PATH=/opt/py36_e/bin/python3.6
 # 默认安装所有子模块
 MODULE="bkmonitorv3"
 PROJECTS=(influxdb-proxy transfer grafana monitor unify-query ingester)
-RPM_DEP=(gcc mysql-devel libevent-devel libXext libXrender fontconfig)
+RPM_DEP=(gcc libmysqlclient-dev libevent-dev libxext6 libxrender1 fontconfig)
 ENV_FILE=/data/install/bin/04-final/bkmonitorv3.env
 BIND_ADDR=127.0.0.1
 
-IMAGE=docker-bkrepo.cwoa.net/ce1b09/weops-docker/bkmonitorv3:v3.6.3656
+# IMAGE=docker-bkrepo.cwoa.net/ce1b09/weops-docker/bkmonitorv3:v3.6.3656
 # error exit handler
 err_trap_handler () {
     MYSELF="$0"
@@ -154,9 +154,9 @@ fi
 if [[ -n "$ENV_FILE" && ! -r "$ENV_FILE" ]]; then
     warning "指定的$ENV_FILE不存在"
 fi
-if (( EXITCODE > 0 )); then
-    usage_and_exit "$EXITCODE"
-fi
+# if (( EXITCODE > 0 )); then
+#     usage_and_exit "$EXITCODE"
+# fi
 
 # 安装用户和配置目录
 id -u blueking &>/dev/null || \
@@ -183,8 +183,8 @@ rsync -a --delete "${MODULE_SRC_DIR}/$MODULE/" "$PREFIX/$MODULE/"
 case $BKMONITOR_MODULE in 
     monitor) 
         # 安装rpm依赖包，如果不存在
-        if ! rpm -q "${RPM_DEP[@]}" >/dev/null; then
-            yum -y install "${RPM_DEP[@]}"
+        if ! dpkg -l "${RPM_DEP[@]}" >/dev/null; then
+            apt -y install "${RPM_DEP[@]}"
         fi
         # 拷贝证书目录到$PREFIX, monitor依赖证书
         rsync -a "$CERT_PATH/" "$PREFIX/cert/"
@@ -238,12 +238,12 @@ case $BKMONITOR_MODULE in
         -v /data/bkce/bkmonitorv3/cert/saas_priv.txt:/data/bkce/bkmonitorv3/cert/saas_priv.txt:ro \
         -e BK_FILE_PATH=/data/bkce/bkmonitorv3/cert/saas_priv.txt \
         -e PYTHON_BIN=/cache/.bk/env/bin/python3.6_e \
-        --net=host --name=bkmonitorv3-monitor -v /var/run/bkmonitorv3:/var/run/bkmonitorv3/ ${IMAGE} bash -c "cd /data/bkce/bkmonitorv3/monitor && supervisord -n -c /data/bkce/etc/supervisor-bkmonitorv3-monitor.conf"
+        --net=host --name=bkmonitorv3-monitor -v /var/run/bkmonitorv3:/var/run/bkmonitorv3/ ${BKMONITORV3_IMAGE} bash -c "cd /data/bkce/bkmonitorv3/monitor && supervisord -n -c /data/bkce/etc/supervisor-bkmonitorv3-monitor.conf"
         # 初始化数据同步zk和写入influxdb信息（可重复执行）
         (
             set +u +e
             # 设置加密解释器用得变量
-            docker exec bkmonitorv3-monitor bash -c "export INFLUXDB_BKMONITORV3_IP0=$INFLUXDB_BKMONITORV3_IP0;export INFLUXDB_BKMONITORV3_PORT=$INFLUXDB_BKMONITORV3_PORT;export INFLUXDB_BKMONITORV3_USER=$INFLUXDB_BKMONITORV3_USER;export INFLUXDB_BKMONITORV3_PASS=$INFLUXDB_BKMONITORV3_PASS;export BKMONITORV3_INFLUXDB_PROXY_HOST=$BKMONITORV3_INFLUXDB_PROXY_HOST;export BKMONITORV3_INFLUXDB_PROXY_PORT=$BKMONITORV3_INFLUXDB_PROXY_PORT;export ES7_HOST=$ES7_HOST;export ES7_REST_PORT=$ES7_REST_PORT;export ES7_USER=$ES7_USER;export ES7_PASSWORD=$ES7_PASSWORD;export KAFKA_HOST=$KAFKA_HOST;export KAFKA_PORT=$KAFKA_PORT;bash -x on_migrate.docker 1>&2 2>/dev/null;"
+            docker exec bkmonitorv3-monitor bash -c "export INFLUXDB_BKMONITORV3_IP0=$INFLUXDB_BKMONITORV3_IP0;export INFLUXDB_BKMONITORV3_IP1=$INFLUXDB_BKMONITORV3_IP1;export INFLUXDB_BKMONITORV3_PORT=$INFLUXDB_BKMONITORV3_PORT;export INFLUXDB_BKMONITORV3_USER=$INFLUXDB_BKMONITORV3_USER;export INFLUXDB_BKMONITORV3_PASS=$INFLUXDB_BKMONITORV3_PASS;export BKMONITORV3_INFLUXDB_PROXY_HOST=$BKMONITORV3_INFLUXDB_PROXY_HOST;export BKMONITORV3_INFLUXDB_PROXY_PORT=$BKMONITORV3_INFLUXDB_PROXY_PORT;export ES7_HOST=$ES7_HOST;export ES7_REST_PORT=$ES7_REST_PORT;export ES7_USER=$ES7_USER;export ES7_PASSWORD=$ES7_PASSWORD;export KAFKA_HOST=$KAFKA_HOST;export KAFKA_PORT=$KAFKA_PORT;bash -x on_migrate.docker 1>&2 2>/dev/null;"
         )
         ;;
     transfer) 

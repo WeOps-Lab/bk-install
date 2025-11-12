@@ -14,7 +14,7 @@ ERLANG_COOKIE=
 ERLANG_COOKIE_SERVER_PATH=/var/lib/rabbitmq/.erlang.cookie
 ERLANG_COOKIE_CLIENT_PATH=$HOME/.erlang.cookie 
 CLUSTER_FORMATION_CONSUL_SVC=rabbitmq
-
+source /data/install/weops_version
 usage () {
     cat <<EOF
 用法: 
@@ -81,7 +81,23 @@ while (( $# > 0 )); do
     esac
     shift 
 done 
+check_port_alive () {
+    local port=$1
 
+    lsof -i:$port -sTCP:LISTEN 1>/dev/null 2>&1
+
+    return $?
+}
+wait_port_alive () {
+    local port=$1
+    local timeout=${2:-10}
+
+    for i in $(seq $timeout); do
+        check_port_alive $port && return 0
+        sleep 1
+    done
+    return 1
+}
 # 参数合法性有效性校验
 if [[ ${#ERLANG_COOKIE} -eq 0 || ${#ERLANG_COOKIE} -gt 255 ]]; then
     warning "(-e, --erlang-cookie) 指定的字符串长度等于0或者大于255"
@@ -91,16 +107,24 @@ if [[ $EXITCODE -ne 0 ]]; then
 fi
 
 # make sure previous rabbitmq-server stopped
-systemctl stop rabbitmq-server
+docker stop rabbitmq
 
 log "生成 $ERLANG_COOKIE_SERVER_PATH $ERLANG_COOKIE_CLIENT_PATH 并设置权限为400"
 echo -n "$ERLANG_COOKIE" > "$ERLANG_COOKIE_SERVER_PATH"
-chown rabbitmq.rabbitmq "$ERLANG_COOKIE_SERVER_PATH"
+chown 999:999 "$ERLANG_COOKIE_SERVER_PATH"
 chmod 400 "$ERLANG_COOKIE_SERVER_PATH"
 echo -n "$ERLANG_COOKIE" > "$ERLANG_COOKIE_CLIENT_PATH"
 
 log "enbale consul backend service discovery plugin"
-rabbitmq-plugins enable --offline rabbitmq_peer_discovery_consul
+docker run --rm \
+    --name=rabbitmq-conf \
+    --net=host \
+    --ulimit nofile=102400:102400 \
+    -v /etc/rabbitmq:/etc/rabbitmq \
+    -v /data/bkce/public/rabbitmq:/data/bkce/public/rabbitmq \
+    -v /data/bkce/logs/rabbitmq:/data/bkce/logs/rabbitmq \
+    -v /var/lib/rabbitmq/:/var/lib/rabbitmq/ \
+    $RABBITMQ_MANAGE_IMAGE rabbitmq-plugins enable --offline rabbitmq_peer_discovery_consul
 
 log "modify rabbitmq config to using consul backend peer discovery"
 [[ -r /etc/rabbitmq/rabbitmq.conf ]] && sed -i '/cluster_formation/d' /etc/rabbitmq/rabbitmq.conf
@@ -130,10 +154,11 @@ if grep -q \\. /etc/rabbitmq/rabbitmq-env.conf 2>/dev/null; then
 fi
 
 # start rabbitmq and reset all data (become blank one)
-systemctl start rabbitmq-server
+docker start rabbitmq
+log "wait for rabbitmq port 5672 alive"
+wait_port_alive 5672 10
 
-rabbitmqctl stop_app && \
-rabbitmqctl reset && \
-rabbitmqctl start_app
-
-
+log "stop rabbitmq and reset all data"
+docker exec rabbitmq rabbitmqctl stop_app && \
+docker exec rabbitmq rabbitmqctl force_reset && \
+docker exec rabbitmq rabbitmqctl start_app

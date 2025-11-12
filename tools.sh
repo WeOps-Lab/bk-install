@@ -191,7 +191,7 @@ pcmdrc () {
     local target=$1
     shift 1
     local content=$@
-    local str="source \${CTRL_DIR}/action.rc;source \${CTRL_DIR}/tools.sh;${content[@]}"
+    local str="source ~/.bkrc;source \${CTRL_DIR}/action.rc;source \${CTRL_DIR}/tools.sh;${content[@]}"
     # 根据传入的第一个参数判断pcmd的参数为-m 还是-H
     if [[ $target =~ [0-9]\. ]]; then
         ${CTRL_DIR}/pcmd.sh -H  ${target} "$str"
@@ -263,7 +263,7 @@ wait_return_code () {
 _mount_shared_nfs () {
     local module=$1
         set -e
-        yum -y install nfs-utils
+        apt -y install nfs-common
         case $module in
             open_paas)
                 local name=$(date +%s)
@@ -413,6 +413,14 @@ get_service_status () {
         service+=( "${p}.service" )
     done
     "${CTRL_DIR}"/bin/bks.sh "${service[@]}"
+}
+
+get_docker_service_status () {
+    local service=()
+    export FORCE_TTY=1
+    for p in "$@"; do  
+        docker ps -q -f name="${p}"
+    done
 }
 
 _sign_host_as_module () {

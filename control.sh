@@ -91,11 +91,7 @@ case ${module} in
                 IFS="," read -r -a target_server<<<"${_project_ip["${target_name},${project}"]}"
                 for ip in "${target_server[@]}"; do
                     emphasize "${action} ${module} ${project} on host: ${ip}"
-                    if [[ $project == "monitor" ]]; then
-                        pcmdrc "$ip" "docker ${action} bkmonitorv3-${project}"
-                    else
-                        pcmdrc "$ip" "action_${module} ${action} ${project}"
-                    fi
+                    pcmdrc "$ip" "action_${module} ${action} ${project}"
                 done
             done
         else
@@ -103,11 +99,7 @@ case ${module} in
             IFS="," read -r -a target_server<<<"${_project_ip["${target_name},${project}"]}"
             for ip in "${target_server[@]}"; do
                 emphasize "${action} ${module} ${project} on host: ${ip}"
-                if [[ $project == "monitor" ]]; then
-                    pcmdrc "$ip" "docker ${action} bkmonitorv3-${project}"
-                else
-                    pcmdrc "$ip" "action_${module} ${action} ${project}"
-                fi
+                pcmdrc "$ip" "action_${module} ${action} ${project}"
             done
         fi
         ;;
@@ -149,8 +141,6 @@ case ${module} in
         if [[ ${project} =~ ^[a-z] ]]; then
             if [[ ! ${SERVICES[*]} =~ ${project} ]]; then
                 err "${module} not exist backend module like: ${project}"
-            elif [[ ${project} =~ "nodeman" ]]; then
-                pcmdrc "${target#bk}"  "docker ${action} ${module}-${project}"
             else
                 project="${project/-/_}" # 兼容consul-template 和 consul_template
                 pcmdrc "${target#bk}"  "action_${NODEMAN_SERVICE[${project}]} ${action} ${project}"

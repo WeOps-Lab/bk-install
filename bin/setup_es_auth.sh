@@ -104,7 +104,7 @@ done
 # 参数合法性有效性校验，这些可以使用通用函数校验。
 
 # 安装
-if ! rpm -q elasticsearch &>/dev/null; then
+if ! dpkg -l elasticsearch &>/dev/null; then
     error "$NAME 未安装"
 fi
 

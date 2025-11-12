@@ -563,6 +563,11 @@ export BK_CERT_HOME=\$BK_HOME/cert
 export DATA_HOME=\$BK_HOME/public
 export LOGS_PATH=\$BK_HOME/logs
 alias pcmd=$CTRL_DIR/pcmd.sh
+alias consul="docker exec -it bk-consul consul"
+alias redis-cli="docker exec -it redis-mymaster redis-cli"
+alias mongo="docker exec -it mongo mongo"
+alias rabbitmqctl="docker exec -it rabbitmq rabbitmqctl"
+alias rabbitmq-diagnostics="docker exec -it rabbitmq rabbitmq-diagnostics"
 _OO_
 }
 

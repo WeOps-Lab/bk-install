@@ -18,7 +18,7 @@ SELF_DIR=$(dirname "$(readlink -f "$0")")
 
 # 模块安装后所在的上一级目录
 PREFIX=/data/bkee
-
+source /data/install/weops_version
 # 模块目录的上一级目录
 MODULE_SRC_DIR=/data/src
 
@@ -28,13 +28,13 @@ PYTHON_PATH=/opt/py36/bin/python3.6
 # 默认安装所有子模块
 MODULE=bknodeman
 PROJECTS=(nodeman)
-RPM_DEP=(mysql-devel gcc)
+RPM_DEP=(libmysqlclient-dev gcc)
 ENV_FILE=
 BIND_ADDR=127.0.0.1
 OUTER_IP=
 
 # 使用的docker镜像
-IMAGE=docker-bkrepo.cwoa.net/ce1b09/weops-docker/bknodeman:v2.3.1
+# IMAGE=docker-bkrepo.cwoa.net/ce1b09/weops-docker/bknodeman:v2.3.1
 
 usage () {
     cat <<EOF
@@ -160,8 +160,8 @@ EOF
 rsync -a --delete "${MODULE_SRC_DIR}/$MODULE" "$PREFIX/"
 
 # 安装rpm依赖包，如果不存在
-if ! rpm -q "${RPM_DEP[@]}" >/dev/null; then
-    yum -y install "${RPM_DEP[@]}"
+if ! dpkg -l "${RPM_DEP[@]}" >/dev/null; then
+    apt -y install "${RPM_DEP[@]}"
 fi
 
 # 渲染配置
@@ -198,4 +198,4 @@ docker run -itd \
 -v /data/bkce/bknodeman/cert/saas_priv.txt:/data/bkce/bknodeman/cert/saas_priv.txt:ro \
 -e BK_FILE_PATH=/data/bkce/bknodeman/cert/saas_priv.txt \
 -e PYTHON_BIN=/cache/.bk/env/bin/python3.6_e \
---net=host --name=bknodeman-nodeman ${IMAGE} bash -c "cd /data/bkce/bknodeman/nodeman && supervisord -n -c /data/bkce/etc/supervisor-bknodeman-nodeman.conf"
+--net=host --name=bknodeman-nodeman ${NODEMAN_IMAGE} bash -c "cd /data/bkce/bknodeman/nodeman && supervisord -n -c /data/bkce/etc/supervisor-bknodeman-nodeman.conf"

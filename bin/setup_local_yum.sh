@@ -9,7 +9,7 @@ VERSION=1.0
 EXITCODE=0
 
 # 全局默认变量
-REPO_CONFIG_PATH=/etc/yum.repos.d/Blueking.repo
+REPO_CONFIG_PATH=/etc/apt/sources.list.d/bk-custom.list
 AUTO_CONFIG=0
 
 usage () {
@@ -94,19 +94,22 @@ fi
 if [[ $AUTO_CONFIG -eq 1 ]]; then
     log "写入yum配置文件：$REPO_CONFIG_PATH"
     cat <<EOF | tee "$REPO_CONFIG_PATH"
-[bk-custom]
-name=Blueking
-baseurl=$YUM_URL
-enabled=1   
-gpgcheck=0  
+deb [trusted=yes] $YUM_URL ./
 EOF
 fi
 
-# 生成元数据缓存 并校验是否存在consul
-yum makecache
-if yum info consul &>/dev/null; then
-    echo "setup local yum successful"
+# 写入额外的hosts配置
+if ! grep -q "repo.service.consul" /etc/hosts; then
+    # 从url提取ip,去掉http://和端口
+    host=$(echo "$YUM_URL" | sed 's/http:\/\///' | sed 's/:.*//')
+    echo "$host repo.service.consul" >> /etc/hosts
+fi
+
+# 生成元数据缓存 并校验是否存在docker-ce
+apt update
+if apt search docker-ce &>/dev/null; then
+    echo "setup local apt successful"
 else
-    echo "setup local yum failed"
+    echo "setup local apt failed"
     exit 1
 fi

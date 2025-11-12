@@ -4,7 +4,7 @@
 # 用法：
 
 # 安全模式
-set -euo pipefail 
+set -euo pipefail
 
 # 通用脚本框架变量
 PROGRAM=$(basename "$0")
@@ -22,11 +22,11 @@ DATACENTER="dc"
 NODE_NAME=$HOSTNAME
 ROLE="client"
 CLUSTER_IP_LIST=
-CONSUL_VERSION="1.7.9"
+source /data/install/weops_version
 
 usage () {
     cat <<EOF
-用法: 
+用法:
     $PROGRAM [ -h --help -?  查看帮助 ]
             [ -j, --join            [必填] "集群auto join的服务器列表，逗号分隔" ]
             [ -e, --encrypt-key     [必填] "集群通信的key，用consul keygen生成，集群内必须一致" ]
@@ -76,7 +76,7 @@ trap 'err_trap_handler ${LINENO} $?' ERR
 
 # 解析命令行参数，长短混合模式
 (( $# == 0 )) && usage_and_exit 1
-while (( $# > 0 )); do 
+while (( $# > 0 )); do
     case "$1" in
         -r | --role )
             shift
@@ -122,18 +122,18 @@ while (( $# > 0 )); do
             usage_and_exit 0
             ;;
         --version | -v | -V )
-            version 
+            version
             exit 0
             ;;
         -*)
             error "不可识别的参数: $1"
             ;;
-        *) 
+        *)
             break
             ;;
     esac
-    shift 
-done 
+    shift
+done
 
 # 参数合法性有效性校验，这些可以使用通用函数校验。
 if ! [[ $SERVER_NUM -eq 1 || $SERVER_NUM -eq 3 || $SERVER_NUM -eq 5 || $SERVER_NUM -eq 7 ]]; then
@@ -147,13 +147,13 @@ if [[ $EXITCODE -ne 0 ]]; then
 fi
 
 # 安装 consul
-if ! rpm -ql consul &>/dev/null; then
-    yum -q -y install consul-"${CONSUL_VERSION}"
-fi
+# if ! rpm -ql consul &>/dev/null; then
+#    yum -q -y install consul-"${CONSUL_VERSION}"
+# fi
 
 # 生成consul配置
 log "生成consul主配置文件 /etc/consul.d/consul.json"
-
+mkdir -p /etc/consul.d
 # get nameservers to json array
 Y=$(awk '/^nameserver/ { printf "%8s\042%s\042,\n", " ", $2 }' /etc/resolv.conf | grep -wv 127.0.0.1 || true)
 recursors="${Y%,}"
@@ -209,7 +209,7 @@ fi
 # 生成consul的auto_join配置
 read -r -a X <<< "${CLUSTER_IP_LIST//,/ }"
 ip_json="[$(printf '"%q",' "${X[@]}")"
-ip_json="${ip_json%,}]"		    # 删除最后一个逗号
+ip_json="${ip_json%,}]"             # 删除最后一个逗号
 cat <<EOF > /etc/consul.d/auto_join.json
 {
     "retry_join": $ip_json
@@ -217,38 +217,70 @@ cat <<EOF > /etc/consul.d/auto_join.json
 EOF
 
 # 存放自定义的service定义
-install -d /etc/consul.d/service
-chown root.consul -R /etc/consul.d
+install -d /etc/consul.d/service /var/lib/consul
+chown 100:100 -R /etc/consul.d /var/lib/consul
 chmod 640 /etc/consul.d/*.json
 
 # 校验json是否合法，否则提示
-if ! consul validate /etc/consul.d; then
-    log "consul 配置文件校验失败，请根据stderr的错误提示修复" 
+if ! docker run --rm -v /etc/consul.d:/etc/consul.d "${CONSUL_IMAGE}" validate /etc/consul.d; then
+    log "consul 配置文件校验失败，请根据stderr的错误提示修复"
     exit 1
 fi
 
-log "设置consul开机启动"
-systemctl enable consul
-# --no-block可以防止bootstrap阶段选举集群时启动卡住
-systemctl --no-block start consul
+log "删除已存在的consul容器"
+if docker ps -a | awk '{print $NF}' | grep -wq "bk-consul"; then
+  log "检测到已存在的bk-consul,删除"
+  docker rm -f bk-consul
+fi
 
-# 修改域名解析配置
-log "设置 resolv.conf"
-sed -i '/option/s/rotate//' /etc/resolv.conf
-if ! grep -q "nameserver.*127.0.0.1" /etc/resolv.conf; then
-    if [[ -s /etc/resolv.conf ]]; then
-        sed -i '1i nameserver 127.0.0.1' /etc/resolv.conf
-    else
-        echo "nameserver 127.0.0.1" >> /etc/resolv.conf 
-    fi
+if [[ -d /var/lib/consul ]]; then
+    log "consul数据目录已存在"
+else
+    log "创建consul数据目录"
+    mkdir -p /var/lib/consul
+    chown -R 100:100 /var/lib/consul
 fi
-if ! grep -q "search node.consul" /etc/resolv.conf; then
-    echo "search node.consul" >> /etc/resolv.conf
+
+if [[ -d /var/log/consul ]]; then
+    log "consul日志目录已存在"
+else
+    log "创建consul日志目录"
+    mkdir -p /var/log/consul
+    chown -R 100:100 /var/log/consul
 fi
+
+log "启动consul容器"
+docker run --name=bk-consul -d \
+    --label app=bk \
+    -v /etc/consul.d:/etc/consul.d \
+    -v /var/lib/consul:/var/lib/consul \
+    -v /var/log/consul:/var/log/consul \
+    --net=host \
+    -e CONSUL_ALLOW_PRIVILEGED_PORTS=53 \
+    ${CONSUL_IMAGE} \
+    agent -config-dir=/etc/consul.d -config-dir=/etc/consul.d/service -data-dir=/var/lib/consul
+
+# systemctl enable consul
+# --no-block可以防止bootstrap阶段选举集群时启动卡住
+# systemctl --no-block start consul
+
+# 修改域名解析配置,弃用，ubuntu手动配置dns
+# log "设置 resolv.conf"
+# sed -i '/option/s/rotate//' /etc/resolv.conf
+# if ! grep -q "nameserver.*127.0.0.1" /etc/resolv.conf; then
+#     if [[ -s /etc/resolv.conf ]]; then
+#         sed -i '1i nameserver 127.0.0.1' /etc/resolv.conf
+#     else
+#         echo "nameserver 127.0.0.1" >> /etc/resolv.conf
+#     fi
+# fi
+# if ! grep -q "search node.consul" /etc/resolv.conf; then
+#     echo "search node.consul" >> /etc/resolv.conf
+# fi
 # 关闭nscd的服务
-if systemctl is-active nscd &>/dev/null; then
-    systemctl stop nscd 2>/dev/null
-fi
+# if systemctl is-active nscd &>/dev/null; then
+#     systemctl stop nscd 2>/dev/null
+# fi
 
 # 检查是否生效, 直接通过dns接口检测
 log "等待consul服务ready"

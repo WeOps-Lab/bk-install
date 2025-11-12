@@ -33,7 +33,9 @@ PYTHON_PATH=/opt/py36/bin/python3.6
 
 MODULE=open_paas
 
-RPM_DEP=(gcc mysql mysql-devel openssl-devel libevent-devel bzip2-devel sqlite-devel tk-devel gdbm-devel libffi-devel db4-devel libpcap-devel xz-devel pcre-devel nfs-utils mailcap)
+# RPM_DEP=(gcc mysql mysql-devel openssl-devel libevent-devel bzip2-devel sqlite-devel tk-devel gdbm-devel libffi-devel db4-devel libpcap-devel xz-devel pcre-devel nfs-utils mailcap)
+
+RPM_DEP=(gcc libmysqlclient-dev mysql-common openssl libssl-dev libev-dev libbz2-dev tk-dev libgdbm-dev libffi-dev sqlite3 libsqlite3-dev db5.3-util libpcap-dev xz-utils libpcre3 libpcre3-dev  nfs-common)
 
 ENV_FILE=
 BIND_ADDR=127.0.0.1
@@ -163,10 +165,10 @@ cat > /etc/tmpfiles.d/open_paas.conf <<EOF
 D /var/run/open_paas 0755 blueking blueking
 EOF
 
- # 安装rpm依赖包，如果不存在
- if ! rpm -q "${RPM_DEP[@]}" >/dev/null; then
-     yum -y install "${RPM_DEP[@]}"
- fi
+# 安装rpm依赖包，如果不存在
+if ! dpkg -l "${RPM_DEP[@]}" >/dev/null; then
+    apt -y install "${RPM_DEP[@]}"
+fi
 
 # 拷贝pip pkgs
 rsync -a --delete "${MODULE_SRC_DIR}"/open_paas/support-files "$PREFIX/open_paas/"

@@ -100,7 +100,7 @@ fi
 
 # 判断用户是否存在
 
-result=$(mongo "$MONGODB_URL" --quiet <<END
+result=$(docker exec mongo mongo "$MONGODB_URL" --quiet <<END
 db.system.users.find({ user: "$DB_USER", db: "$DB"}).count();
 END
 )
@@ -111,7 +111,7 @@ if [[ "${result}" -gt 0 ]]; then
 fi
 
 # 开始添加用户
-mongo "$MONGODB_URL" <<END
+docker exec -i mongo mongo "$MONGODB_URL" <<END
 use $DB
 db.createUser( {user: "$DB_USER",pwd: "$DB_PASS",roles: [ { role: "readWrite", db: "$DB" } ]})
 END

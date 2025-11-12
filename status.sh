@@ -88,6 +88,20 @@ declare -A SERVICE=(
     ['auth']=bk-auth
     ['etcd']=etcd
     ['apisix']=apisix
+    ['weopsconsul']=weops-consul
+    ['weopsproxy']=weops-proxy
+    ['kafkaadapter']=kafka-adapter
+    ['trino']=trino
+    ['datart']=datart
+    ['minio']=minio
+    ['prometheus']=prometheus
+    ['vault']=vault
+    ['automate']=automate
+    ['age']=age
+    ['monstache']=monstache
+    ['casbinmesh']=casbin_mesh
+    ['vector']=vector
+    ['weopsrdp']=weopsrdp
 )
 
 declare -A BCS_SERVICE=(
@@ -144,6 +158,9 @@ case $module in
             fi
         fi
         ;;
+    consul|redis|mysql|zk|mongodb|kafka|influxdb|rabbitmq)
+        pcmdrc "${target}" "get_docker_service_status ${SERVICE[$module]}"
+        ;;
     nginx)  
         pcmdrc "${target}" "get_service_status ${SERVICE[$module]} ${SERVICE["consul-template"]}"
         ;;
@@ -166,6 +183,9 @@ case $module in
     etcd)
         target_name=${module#bk}
         pcmdrc "${target_name}" "get_service_status ${SERVICE[${target_name}]}"
+        ;;
+    weopsconsul|weopsproxy|kafkaadapter|trino|datart|minio|prometheus|vault|automate|age|monstache|casbinmesh|vector|weopsrdp)
+        pcmdrc "${module}" "get_docker_service_status ${SERVICE[${module}]}"
         ;;
     bknodeman|nodeman)
         target_name=${module#bk}

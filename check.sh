@@ -35,6 +35,7 @@ case $MODULE in
     bklog) $PCMD -m ${MODULE#bk} "$SELF_DIR/health_check/check_consul_svc_health.sh $MODULE" ;;
     bkmonitorv3|monitorv3) $PCMD -H $BK_MONITORV3_MONITOR_IP 'docker exec bkmonitorv3-monitor bash -c "cd /data/bkce/bkmonitorv3/monitor;bin/manage.sh healthz"' ;;
     nginx) $PCMD -m nginx '$CTRL_DIR/health_check/check_openresty.sh' ;;
+    weopsconsul) $PCMD -m weopsconsul "$CTRL_DIR/health_check/check_weops_component.sh ${MODULE}" ;;
     dbcheck)
         set +u
         [[ -f ${HOME}/.bkrc ]] && source ${HOME}/.bkrc

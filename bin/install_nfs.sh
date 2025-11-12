@@ -32,7 +32,7 @@ NFS_ROOT_DIR=/data/bkee/public/nfs
 # nfs 的uid和gid
 NFS_UID=$(id -u blueking)
 NFS_GID=$(id -g blueking)
-MODULE=(paas job saas nodeman)  # 默认只安装基础的
+MODULE=(paas job saas nodeman cwlicense)  # 默认只安装基础的
 
 
 usage () {
@@ -120,24 +120,29 @@ declare -A NFS_MODULE_IPLIST=(
     ["nodeman"]="${BK_NODEMAN_IP[@]}"
 )
 
-if ! rpm -q nfs-utils >/dev/null 2>&1; then
+if ! dpkg -l nfs-utils >/dev/null 2>&1; then
     # 会自动安装rpcbind的依赖
     echo "install nfs-utils"
-    yum -y install nfs-utils
+    #apt-get -y install nfs-utils
+    apt-get -y install nfs-kernel-server nfs-common portmap
     # 如果没启动，则启动，并设置开机启动
     # nfs会指向nfs-server.service,会自动启动依赖的service和target
 fi
 
-if ! systemctl is-active nfs &>/dev/null; then
-    systemctl start nfs
-    systemctl enable nfs
+if ! systemctl is-active nfs-kernel-server &>/dev/null; then
+    systemctl start nfs-kernel-server
+    systemctl enable nfs-kernel-server
 fi
+
+/etc/init.d/nfs-kernel-server start
 
 # 创建nfs对应模块的目录
 create_module_exports_dir () {
     local module=$1
     local module_dir=${NFS_MODULE_DIR[$module]}
     echo "创建模块目录($module_dir)"
+    mkdir -p "$module_dir"
+    mkdir -p /etc/exports.d
     install -d -m 755 -o "$NFS_UID" -g "$NFS_GID" "$module_dir"
 }
 

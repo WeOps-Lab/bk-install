@@ -7,7 +7,7 @@ SELF_DIR=$(dirname "$(readlink -f "$0")")
 . $SELF_DIR/../load_env.sh
 
 gse_zk_addr="$BK_GSE_ZK_ADDR"
-zkbin=/opt/zookeeper/bin/zkCli.sh
+zkbin="docker exec -i zookeeper bin/zkCli.sh"
 bk_biz_id=2 # 《蓝鲸》业务id，默认为2
 
 if [[ -z "$gse_zk_addr" ]]; then
@@ -27,6 +27,6 @@ redis_storage="[{\"type\":1,\"biz_id\":$bk_biz_id,\"cluster_index\":1,\"data_set
 $zkbin -server "$gse_zk_addr" create /gse/config/etc/dataserver/data/1001 "$redis_storage"
 
 # create redis storage
-redis_host="[{\"host\":\"$BK_CMDB_REDIS_HOST\",\"port\":$BK_CMDB_REDIS_PORT,\"type\":4,\"passwd\":\"$BK_CMDB_REDIS_PASSWORD\",\"mastername\":\"$BK_CMDB_REDIS_MASTER_NAME\"}]"
+redis_host="[{\"host\":\"$BK_CMDB_REDIS_SENTINEL_HOST\",\"port\":$BK_CMDB_REDIS_SENTINEL_PORT,\"type\":4,\"passwd\":\"$BK_CMDB_REDIS_PASSWORD\",\"mastername\":\"$BK_CMDB_REDIS_MASTER_NAME\"}]"
 $zkbin -server "$gse_zk_addr" create /gse/config/etc/dataserver/storage/all/0_1 "$redis_host"
 $zkbin -server "$gse_zk_addr" set /gse/config/etc/dataserver/storage/all/0_1 "$redis_host"

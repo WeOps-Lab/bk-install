@@ -18,7 +18,6 @@ ACTION=
 MONGODB_USER=${MONGODB_USER:-""}
 MONGODB_PASSWORD=${MONGODB_PASSWORD:-""}
 REPLICA_SET_NAME=rs0
-
 usage () {
     cat <<EOF
 用法: 
@@ -145,7 +144,7 @@ if [[ $ACTION = "config" ]]; then
     # generate key file
     log "生成 $KEY_PATH 并设置权限为400"
     echo -n "$ENCRYPT_KEY" > "$KEY_PATH"
-    chown mongod.mongod "$KEY_PATH"
+    chown 999:999 "$KEY_PATH"
     chmod 400 /etc/mongod.key
 
     log "修改/etc/mongod.conf，增加replica和keyfiles设定"
@@ -158,7 +157,7 @@ security:
 EOF
 
     log "重启mongod 服务"
-    systemctl restart mongod
+    docker restart mongo
 else
     read -r -a X <<< "${CLUSTER_IP_LIST//,/ }"
     lan_ip=$(get_self_ip "${X[@]}")
@@ -177,10 +176,10 @@ else
 
     # init replica set config
     log "start rs.initiate() for mongodb cluster"
-    mongo --port "$CLIENT_PORT" --eval "db.disableFreeMonitoring();"    # 取消4.2.2版本的监控信息声明
-    mongo --port "$CLIENT_PORT" --eval "rs.initiate( { _id : \"$REPLICA_SET_NAME\", members: [ $members ] })"
+    docker exec -i mongo mongo --port "$CLIENT_PORT" --eval "db.disableFreeMonitoring();"    # 取消4.2.2版本的监控信息声明
+    docker exec -i mongo mongo --port "$CLIENT_PORT" --eval "rs.initiate( { _id : \"$REPLICA_SET_NAME\", members: [ $members ] })"
     log "waiting for rs.initiate to complete(timeout=20s)"
-    mongo --port "$CLIENT_PORT" <<END
+    docker exec -i mongo mongo --port "$CLIENT_PORT" <<END
 var timeout = 10
 while(!db.isMaster().ismaster) {
         if ( timeout <= 0 ) { 
@@ -198,10 +197,10 @@ if ( timeout <= 0 ) {
 END
 
     log "get rs status"
-    mongo --port "$CLIENT_PORT" --eval "rs.status()"
+    docker exec -i mongo mongo --port "$CLIENT_PORT" --eval "rs.status()"
 
     log "add mongodb admin account. after that localhost interface also need auth"
-    mongo --port "$CLIENT_PORT" <<END || fail "创建mongodb管理员失败"
+    docker exec -i mongo mongo --port "$CLIENT_PORT" <<END || fail "创建mongodb管理员失败"
 admin = db.getSiblingDB("admin")
 admin.createUser(
 {
