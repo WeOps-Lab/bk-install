@@ -1079,7 +1079,7 @@ install_nodeman () {
     add_or_update_appcode "$BK_NODEMAN_APP_CODE" "$BK_NODEMAN_APP_SECRET"
     for project in ${projects[@]}; do
         local python_path=$(get_interpreter_path ${module} "${project}")
-        for ip in "${BK_NODEMAN_IP[@]}"; do
+        for ip in "${BK_NODEMAN_IP_COMMA[@]}"; do
             emphasize "install ${module} on host: ${ip}"
             cost_time_attention
             "${SELF_DIR}"/pcmd.sh -H "${ip}" \
