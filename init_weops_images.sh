@@ -20,6 +20,15 @@ fi
 
 images=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^docker-bkrepo.cwoa.net/ce1b09/weops-docker/")
 
+contrl_ip=`cat /data/install/.controller_ip`
+if cat /etc/hosts | grep ''$contrl_ip' repo.service.consul';then
+    echo "hosts文件已存在repo.service.consul记录"
+else
+    echo "添加hosts文件记录repo.service.consul"
+    /data/install/pcmd.sh -m all "echo '$contrl_ip repo.service.consul' >> /etc/hosts"
+fi
+
+
 # 遍历每个镜像并重新打标签
 for image in $images; do
     # 获取镜像ID

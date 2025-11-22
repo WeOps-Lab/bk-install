@@ -99,6 +99,7 @@ bkiam_migrate () {
     local dirname=$(map_module_name $module)
     local app_code=BK_${module^^}_APP_CODE
     local app_token=BK_${module^^}_APP_SECRET
+    source ${CTRL_DIR}/utils.fc
     if [[ $module == 'nodeman' ]]; then
         ${CTRL_DIR}/bin/bkiam_migrate.sh -a "${!app_code}" -s "${!app_token}" -e "${CTRL_DIR}/bin/04-final/bknodeman.env"  ${BK_PKG_SRC_PATH}/${dirname}/support-files/bkiam/*.json
     elif [[ $module == 'monitorv3' ]]; then
@@ -319,7 +320,7 @@ _update_common_info () {
 _init_version_data () {
     set +u
     local target_mysql="mysql-paas"
-    local mycmd="mysql --login-path=${target_mysql}" 
+    local mycmd="docker exec -i mysql-client mysql --login-path=${target_mysql}" 
     local MOUDULE="$1"
     declare -A VERSIONS=(
         [bksuite]="蓝鲸智云"
@@ -359,6 +360,7 @@ _OO_
         if [[ "$m" == 'paas_plugins' &&  -z "${VERSION}" ]]; then
             continue 
         else
+            docker cp /tmp/bkv_init_v.sql mysql-client:/tmp
             $mycmd -e "use bksuite_common; source /tmp/bkv_init_v.sql;"
         fi
     done

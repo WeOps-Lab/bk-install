@@ -42,9 +42,15 @@ _bkc () {
 
 # 检查协议
 check_agreement || exit 1
-
+IS_HA_DEPLOY=no
 case $service in
     common)
+        if [ "IS_HA_DEPLOY" == "no" ]; then
+            sed -i '/^redis_sentinel:/,/master_name: mymaster/s/^/# /' ${SELF_DIR}/bin/default/port.yaml
+            sed -i "s/'redis_sentinel',//g" ${SELF_DIR}/qq.py
+            sed -i 's/redis-sentinel.service.consul:26379/redis.service.consul:6379/g' ${SELF_DIR}/bin/default/bkiam.env
+            find ${SELF_DIR}/bin/default/ -type f -exec grep -l "REDIS_MODE=sentinel" {} \; | xargs sed -i 's/REDIS_MODE=sentinel/REDIS_MODE=standalone/g'
+        fi
         _bkc install controller
         _bkc install bkenv
         _bkc install python
@@ -53,7 +59,9 @@ case $service in
         _bkc sync cert
         _bkc install cert
         _bkc install yum
-        _bkc install nfs
+        if [ "IS_HA_DEPLOY" == "yes" ]; then
+            _bkc install nfs
+        fi
         ./bkcli install controller 1 # 安装EPEL源默认不提供的rpm包
         echo ""
         echo "如果以上步骤执行没有报错, 说明你已经完成蓝鲸部署基础依赖的安装, 请按照文档继续执行剩余步骤"
@@ -66,13 +74,17 @@ case $service in
         _bkc install license
         _bkc install mysql
         _bkc install redis
-        _bkc install redis_sentinel
+        if [ "IS_HA_DEPLOY" == "yes" ]; then
+            _bkc install redis_sentinel
+        fi
         _bkc start mysql
         _bkc install nginx
 
         _bkc start license
         _bkc start redis
-        _bkc start redis_sentinel
+        if [ "IS_HA_DEPLOY" == "yes" ]; then
+            _bkc start redis_sentinel
+        fi
         _bkc start nginx
 
         _bkc sync bkiam

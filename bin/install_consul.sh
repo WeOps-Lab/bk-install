@@ -295,3 +295,9 @@ else
     log "部署consul失败"
     exit 1
 fi
+
+log "配置 consul 命令"
+if ! [ -f "/usr/bin/consul" ];then
+    echo 'docker exec -i bk-consul consul "$@"' > /usr/bin/consul
+    chmod +x /usr/bin/consul
+fi

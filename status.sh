@@ -42,21 +42,21 @@ else
 fi
 
 declare -a THIRD_PARTY_SVC=(
-    consul
+    bk-consul
     consul-template
-    mysql@[a-z]+
-    redis@[a-z]+
-    openresty
-    rabbitmq-server
+    "mysql(-[a-z]+)?"
+    redis-[a-z]+
+    nginx
+    rabbitmq
     zookeeper
-    mongod
+    mongo
     kafka
-    elasticsearch
-    influxdb
+    es
+    influx
     beanstalkd
 )
 TMP_PTN=$(printf "%s|" "${THIRD_PARTY_SVC[@]}")
-THIRD_PARTY_SVC_PTN="^(${TMP_PTN%|})\.service$"
+THIRD_PARTY_SVC_PTN="(${TMP_PTN%|})"
 
 declare -A SERVICE=(
     ["mysql"]=mysql@default
@@ -200,17 +200,17 @@ case $module in
         pcmdrc appo "get_service_status bk-filebeat@celery  bk-filebeat@component bk-filebeat@django bk-filebeat@java bk-filebeat@uwsgi"
         ;;
     bkall)
-        pcmdrc all "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh ^bk-"
+        pcmdrc all "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh systemd ^bk-"
         ;;
     tpall)
-        pcmdrc all "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh \"$THIRD_PARTY_SVC_PTN\" "
+        pcmdrc all "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh docker \"$THIRD_PARTY_SVC_PTN\" "
         ;;
     all)
         echo "Status of all blueking components: "
-        pcmdrc all "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh ^bk-"
+        pcmdrc all "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh systemd ^bk-"
         echo 
         echo "Status of all third-party components: "
-        pcmdrc all "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh \"$THIRD_PARTY_SVC_PTN\" "
+        pcmdrc all "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh docker \"$THIRD_PARTY_SVC_PTN\" "
         ;;
     bcs)
         if [[ -n ${project} ]]; then

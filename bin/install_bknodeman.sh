@@ -186,6 +186,9 @@ if [ "$(docker ps -aq -f name=bknodeman-nodeman)" ]; then
     rm -vf /var/run/bknodeman/{celerybeat.pid,nodeman-supervisord.pid,nodeman-supervisord.sock}
 fi
 
+mkdir -p /data/bkce/bknodeman/cert
+touch /data/bkce/bknodeman/cert/saas_priv.txt
+
 docker run -itd \
 -v /data/bkce/bknodeman/nodeman:/data/bkce/bknodeman/nodeman \
 -v /data/bkce/logs/bknodeman:/data/bkce/logs/bknodeman \

@@ -85,6 +85,21 @@ while (( $# > 0 )); do
     shift 
 done 
 
+if docker ps -a | grep -q mysql-client; then
+    log "检测到 mysql-client 容器已存在"
+else
+    log "创建 mysql-client 容器"
+    docker run --name mysql-client -d --net=host \
+    -v /var/run/mysql:/var/run/mysql \
+    docker-bkrepo.cwoa.net/ce1b09/weops-docker/mysql_config_editor:8.0.43 sleep infinity
+fi
+
+if ! [ -f "/usr/bin/mysqladmin" ]; then
+    log "配置 mysqladmin 命令"
+    echo 'docker exec -i mysql-client mysqladmin "$@"' > /usr/bin/mysqladmin
+    chmod +x /usr/bin/mysqladmin
+fi
+
 # 参数合法性有效性校验，这些可以使用通用函数校验。
 if [[ -z $MYSQL_USER || -z $MYSQL_PASSWORD || -z $LOGIN_PATH || -z $HOST_LIST ]]; then 
     warning "--user, --password, --login-path, --host 都必须指定"
@@ -107,7 +122,7 @@ if mysqladmin --login-path="$LOGIN_PATH" ping >/dev/null ; then
     IFS="," read -r -a hosts <<<"$HOST_LIST"
     for h in "${hosts[@]}"; do
         GRANT_SQL="GRANT ALL ON *.* TO $MYSQL_USER@$h IDENTIFIED BY '$MYSQL_PASSWORD'"
-        if ! mysql --login-path="$LOGIN_PATH" -e "$GRANT_SQL"; then
+        if ! docker exec -i mysql-client mysql --login-path="$LOGIN_PATH" -e "$GRANT_SQL"; then
             error "给 $MYSQL_USER@$h 授权失败"
         else
             log "$MYSQL_USER@$h 授权成功"

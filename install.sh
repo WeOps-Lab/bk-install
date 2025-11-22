@@ -142,6 +142,8 @@ install_bkenv () {
         fi
     done
 
+    bash "${SELF_DIR}"/bin/generate_weops_generate_envvars.sh
+
     set -e
 }
 
@@ -268,25 +270,36 @@ _install_redis () {
     local project=$1
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -s -P ${SELF_DIR}/bin/default/port.yaml)
     if [ -z  "${project}" ]; then
-        for redis_ip in "${BK_REDIS_IP[@]}"; do
-            # 仅redis master节点执行动作
-            if [[ $redis_ip == $BK_REDIS_MASTER_IP ]]; then
-                emphasize "install redis master on host: ${redis_ip}"
-                "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis.sh -n '${_project_name["redis,default"]}' -p '${_project_port["redis,default"]}' -a '${BK_REDIS_ADMIN_PASSWORD}' -b \$LAN_IP"
-                emphasize "register ${_project_consul["redis,default"]} on host $redis_ip"
-                reg_consul_svc "${_project_consul["redis,default"]}" "${_project_port["redis,default"]}" "${redis_ip}"
-                continue
-            else
-                emphasize "install redis slave on host: ${redis_ip}"
-                "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis.sh -n '${_project_name["redis,default"]}' -p '${_project_port["redis,default"]}' -a '${BK_REDIS_ADMIN_PASSWORD}' -b \$LAN_IP"
-                emphasize "dont register ${_project_consul["redis,default"]} slave on host $redis_ip"
-            fi
-            if ! grep "${redis_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep -v "CLUSTER" | grep "BK_REDIS_.*_IP_COMM" >/dev/null; then
-                "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis.sh -n '${_project_name["redis,default"]}' -p '${_project_port["redis,default"]}' -a '${BK_REDIS_ADMIN_PASSWORD}' -b \$LAN_IP"
-                emphasize "register ${_project_consul["redis,default"]} on host $redis_ip"
-                # reg_consul_svc "${_project_consul["redis,default"]}" "${_project_port["redis,default"]}" "${redis_ip}"
-            fi
-        done
+        if [ -n "$BK_REDIS_MASTER_IP" ];then
+            for redis_ip in "${BK_REDIS_IP[@]}"; do
+                # 仅redis master节点执行动作
+                if [[ $redis_ip == $BK_REDIS_MASTER_IP ]]; then
+                    emphasize "install redis master on host: ${redis_ip}"
+                    "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis.sh -n '${_project_name["redis,default"]}' -p '${_project_port["redis,default"]}' -a '${BK_REDIS_ADMIN_PASSWORD}' -b \$LAN_IP"
+                    emphasize "register ${_project_consul["redis,default"]} on host $redis_ip"
+                    reg_consul_svc "${_project_consul["redis,default"]}" "${_project_port["redis,default"]}" "${redis_ip}"
+                    continue
+                else
+                    emphasize "install redis slave on host: ${redis_ip}"
+                    "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis.sh -n '${_project_name["redis,default"]}' -p '${_project_port["redis,default"]}' -a '${BK_REDIS_ADMIN_PASSWORD}' -b \$LAN_IP"
+                    emphasize "dont register ${_project_consul["redis,default"]} slave on host $redis_ip"
+                fi
+                if ! grep "${redis_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep -v "CLUSTER" | grep "BK_REDIS_.*_IP_COMM" >/dev/null; then
+                    "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis.sh -n '${_project_name["redis,default"]}' -p '${_project_port["redis,default"]}' -a '${BK_REDIS_ADMIN_PASSWORD}' -b \$LAN_IP"
+                    emphasize "register ${_project_consul["redis,default"]} on host $redis_ip"
+                    # reg_consul_svc "${_project_consul["redis,default"]}" "${_project_port["redis,default"]}" "${redis_ip}"
+                fi
+            done
+        else
+            for redis_ip in "${BK_REDIS_IP[@]}"; do
+                emphasize "install redis single on host: ${redis_ip}"
+                if ! grep "${redis_ip}" "${SELF_DIR}"/bin/02-dynamic/hosts.env | grep -v "CLUSTER" | grep "BK_REDIS_.*_IP_COMM" >/dev/null; then
+                    "${CTRL_DIR}"/pcmd.sh -H "$redis_ip" "'${CTRL_DIR}'/bin/install_redis.sh -n '${_project_name["redis,default"]}' -p '${_project_port["redis,default"]}' -a '${BK_REDIS_ADMIN_PASSWORD}' -b \$LAN_IP"
+                    emphasize "register ${_project_consul["redis,default"]} on host $redis_ip"
+                    reg_consul_svc "${_project_consul["redis,default"]}" "${_project_port["redis,default"]}" "${redis_ip}"
+                fi
+            done
+        fi
     fi
     emphasize "sign host as module"
     pcmdrc redis "_sign_host_as_module redis"
@@ -820,7 +833,7 @@ install_consul_template () {
     "${SELF_DIR}"/pcmd.sh -H "${install_ip}"  "${CTRL_DIR}/bin/install_consul_template.sh -m ${install_module}"
     emphasize "start and reload consul-template on host: ${install_ip}"
     # 启动后需要reload，防止这台ip已经启动过consul-template，如果不reload，没法生效新安装的子配置
-    "${SELF_DIR}"/pcmd.sh -H "${install_ip}" "systemctl start consul-template; sleep 1; systemctl reload consul-template"
+    "${SELF_DIR}"/pcmd.sh -H "${install_ip}" "docker restart consul-template"
 }
 
 install_nginx () {
@@ -1523,11 +1536,11 @@ install_monstache () {
 
 install_age () {
     local module=age
-    emphasize "install age on host: ${BK_AGE_IP0}"
-    "${SELF_DIR}"/pcmd.sh -H "${BK_AGE_IP0}" "${CTRL_DIR}/bin/install_age.sh -u \"${WEOPS_AGE_DB_USER}\" -p \"${WEOPS_AGE_DB_PASSWORD}\" -d \"${WEOPS_AGE_DB_NAME}\""
+    for ip in ${BK_AGE_IP[@]}; do
+        emphasize "install age on host: ${ip}"
+        "${SELF_DIR}"/pcmd.sh -H "${BK_AGE_IP0}" "${CTRL_DIR}/bin/install_age.sh -u \"${WEOPS_AGE_DB_USER}\" -p \"${WEOPS_AGE_DB_PASSWORD}\" -d \"${WEOPS_AGE_DB_NAME}\""
+    done
     reg_consul_svc age 5432 "${BK_AGE_IP0}"
-    emphasize "install age on host: ${BK_AGE_IP1}"
-    "${SELF_DIR}"/pcmd.sh -H "${BK_AGE_IP1}" "${CTRL_DIR}/bin/install_age.sh -u \"${WEOPS_AGE_DB_USER}\" -p \"${WEOPS_AGE_DB_PASSWORD}\" -d \"${WEOPS_AGE_DB_NAME}\""
 }
 
 install_kafkaadapter () {

@@ -71,12 +71,12 @@ action_mongodb () {
 
 action_es7 () {
     local action=$1
-    systemctl ${action} elasticsearch.service
+    docker ${action} es
 }
 
 action_influxdb () {
     local action=$1
-    docker ${action} influxdb
+    docker ${action} influx
 }
 
 action_license () {
@@ -121,13 +121,13 @@ action_cmdb () {
 
 action_consul_template () {
     local action=$1
-    systemctl ${action} consul-template.service
+    docker ${action} consul-template
 }
 
 action_nginx () {
     local action=$1
-    systemctl ${action} openresty.service
-    systemctl ${action} consul-template.service
+    docker ${action} nginx
+    docker ${action} consul-template
 }
 
 action_appo () {
@@ -163,7 +163,7 @@ action_usermgr () {
 action_monitorv3 () {
     local action=$1
     local project=$2
-    if [[ ${project} eq 'monitor' ]];do
+    if [[ ${project} = 'monitor' ]];then
         docker ${action} bk-monitorv3-monitor
     else
         systemctl ${action} bk-${project}.service

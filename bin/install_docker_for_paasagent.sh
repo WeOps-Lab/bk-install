@@ -53,6 +53,7 @@ cat <<EOF > /etc/docker/daemon.json
 EOF
 
 mkdir -p $BK_HOME/public/paas_agent/docker
+systemctl restart docker
 systemctl enable --now docker
 # 为了让blueking身份运行的paasagent也能运行docker cli命令。
 usermod -G docker blueking

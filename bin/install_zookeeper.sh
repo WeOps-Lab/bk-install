@@ -129,9 +129,9 @@ fi
 if [[ -z $CLUSTER_IP_LIST ]]; then
     warning "CLUSTER_IP_LIST(-j)不能为空"
 fi
-if ! command -v java &>/dev/null; then
-    warning "java command not found, please install jdk first"
-fi
+# if ! command -v java &>/dev/null; then
+#     warning "java command not found, please install jdk first"
+# fi
 if [[ $EXITCODE -ne 0 ]]; then
     exit "$EXITCODE"
 fi

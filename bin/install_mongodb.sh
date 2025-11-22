@@ -129,7 +129,7 @@ fi
 if ! [[ -d $LOG_DIR ]]; then
     mkdir -p "$LOG_DIR"
 fi
-chown 999:999 "$DATA_DIR" "$LOG_DIR" "/var/run/mongodb"
+install -o 999 -g 999 -d "$DATA_DIR" "$LOG_DIR" "/var/run/mongodb"
 
 # 修改mongodb配置
 log "生成mongodb主配置文件 /etc/mongod.conf"
