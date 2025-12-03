@@ -230,6 +230,21 @@ case $BKMONITOR_MODULE in
         sed "2,9s/^/#/" /data/bkce/bkmonitorv3/monitor/on_migrate > /data/bkce/bkmonitorv3/monitor/on_migrate.docker
         chmod 0755 /data/bkce/bkmonitorv3/monitor/on_migrate.docker
         # 启动容器
+        ENV_VARS="export INFLUXDB_BKMONITORV3_IP0=$INFLUXDB_BKMONITORV3_IP0;"
+        ENV_VARS+="export INFLUXDB_BKMONITORV3_PORT=$INFLUXDB_BKMONITORV3_PORT;"
+        ENV_VARS+="export INFLUXDB_BKMONITORV3_USER=$INFLUXDB_BKMONITORV3_USER;"
+        ENV_VARS+="export INFLUXDB_BKMONITORV3_PASS=$INFLUXDB_BKMONITORV3_PASS;"
+        ENV_VARS+="export BKMONITORV3_INFLUXDB_PROXY_HOST=$BKMONITORV3_INFLUXDB_PROXY_HOST;"
+        ENV_VARS+="export BKMONITORV3_INFLUXDB_PROXY_PORT=$BKMONITORV3_INFLUXDB_PROXY_PORT;"
+        ENV_VARS+="export ES7_HOST=$ES7_HOST;"
+        ENV_VARS+="export ES7_REST_PORT=$ES7_REST_PORT;"
+        ENV_VARS+="export ES7_USER=$ES7_USER;"
+        ENV_VARS+="export ES7_PASSWORD=$ES7_PASSWORD;"
+        ENV_VARS+="export KAFKA_HOST=$KAFKA_HOST;"
+        ENV_VARS+="export KAFKA_PORT=$KAFKA_PORT;"
+        if [[ -n $BK_INFLUXDB_BKMONITORV3_IP1 ]]; then
+            ENV_VARS+="export INFLUXDB_BKMONITORV3_IP1=$INFLUXDB_BKMONITORV3_IP1;"
+        fi
         docker run -itd \
         -v /data/bkce/bkmonitorv3/monitor:/data/bkce/bkmonitorv3/monitor \
         -v /data/bkce/logs/bkmonitorv3:/data/bkce/logs/bkmonitorv3 \
@@ -243,7 +258,7 @@ case $BKMONITOR_MODULE in
         (
             set +u +e
             # 设置加密解释器用得变量
-            docker exec bkmonitorv3-monitor bash -c "export INFLUXDB_BKMONITORV3_IP0=$INFLUXDB_BKMONITORV3_IP0;export INFLUXDB_BKMONITORV3_IP1=$INFLUXDB_BKMONITORV3_IP1;export INFLUXDB_BKMONITORV3_PORT=$INFLUXDB_BKMONITORV3_PORT;export INFLUXDB_BKMONITORV3_USER=$INFLUXDB_BKMONITORV3_USER;export INFLUXDB_BKMONITORV3_PASS=$INFLUXDB_BKMONITORV3_PASS;export BKMONITORV3_INFLUXDB_PROXY_HOST=$BKMONITORV3_INFLUXDB_PROXY_HOST;export BKMONITORV3_INFLUXDB_PROXY_PORT=$BKMONITORV3_INFLUXDB_PROXY_PORT;export ES7_HOST=$ES7_HOST;export ES7_REST_PORT=$ES7_REST_PORT;export ES7_USER=$ES7_USER;export ES7_PASSWORD=$ES7_PASSWORD;export KAFKA_HOST=$KAFKA_HOST;export KAFKA_PORT=$KAFKA_PORT;bash -x on_migrate.docker 1>&2 2>/dev/null;"
+            docker exec bkmonitorv3-monitor bash -c "${ENV_VARS}bash -x on_migrate.docker 1>&2 2>/dev/null;"
         )
         ;;
     transfer) 

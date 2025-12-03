@@ -88,15 +88,17 @@ function status(){
   if(svc)print svc,state,desc
   # 如果是supervisord, 且未禁止展开, 则展示子进程信息. 不影响退出码.
   if(exec=="(supervisord)"&&!SYSTEMD_ONLY){  # exec未作处理, 需要包含周围的括号.
-    #print "supervisorctl status all:\t\t* "svc" is supervisord, show details."
-    print "\t\t* "svc" extra info: supervisorctl status all"
-    supervisorctl=gensub(/supervisord/, "supervisorctl", 1, exec_long)
-    if(supervisorctl){
-      system(supervisorctl convert_supervisorctl_status)
-    }else {
-      print "\tWARNING\tfailed to detect supervisorctl, skip show supervisord."
-    }
+  #print "supervisorctl status all:\t\t* "svc" is supervisord, show details."
+  print "\t\t* "svc" extra info: supervisorctl status all"
+  # 使用 POSIX 的 gsub 替代 gensub，兼容非 gawk 的 awk 实现
+  supervisorctl = exec_long
+  gsub(/supervisord/, "supervisorctl", supervisorctl)
+  if(supervisorctl){
+    system(supervisorctl convert_supervisorctl_status)
+  }else {
+    print "\tWARNING\tfailed to detect supervisorctl, skip show supervisord."
   }
+}
   # 清空变量
   svc=""; state=""; state_sub=""; uptime=""; ram=""; pid="";
   exec=""; enabled=""; patt_exec_long="";
@@ -162,35 +164,9 @@ status_docker() {
     docker ps -a --format "{{.Names}}\t{{.State}}\t{{.Status}}" | grep -E "$1"
 }
 
-expand_systemd_services (){
-  list_systemd_services | awk -v systemd_unit_patt="$systemd_unit_patt" '
-BEGIN{
-  stderr="/dev/stderr"
-  stdin="/dev/stdin"
-  while(getline < stdin){
-    systemd_services[$0]=0
-  }
-}
-BEGINFILE{
-  patt=FILENAME
-  if(patt~systemd_unit_patt){
-    msg=patt"\tnot-found\t* service not loaded, or name is wrong.\n"
-    gsub(/[.]/,"[&]", patt)
-    patt="^"patt"$"
-  }else{
-    msg="\t\t* PATT %s matches nothing.\n"
-  }
-  n=0;
-  for(svc in systemd_services){
-    if(svc~patt){
-      n++
-      if(!systemd_services[svc]++)print svc
-    }
-  }
-  if(n==0){printf msg, patt > stderr; }
-  nextfile
-}
-' "$@"
+expand_systemd_services() {
+  local patt="${1:-.*}"   # 没传就匹配全部
+  list_systemd_services | grep -E "${patt}"
 }
 
 main (){

@@ -268,6 +268,9 @@ if docker ps -a | awk '{print $NF}' | grep -wq "mysql"; then
   docker rm -f mysql
 fi
 
+touch ~/.mylogin.cnf
+chmod 600 ~/.mylogin.cnf
+
 docker run -d \
     --name mysql \
     --net=host \
@@ -276,6 +279,7 @@ docker run -d \
     -v ${DATA_DIR}:${DATA_DIR} \
     -v ${LOG_DIR}:${LOG_DIR} \
     -v /var/run/mysql:/var/run/mysql \
+    -v ~/.mylogin.cnf:/root/.mylogin.cnf \
     --health-cmd "mysqladmin ping -h ${BIND_ADDR} -uroot -p${PASSWORD}" \
     -e MYSQL_ROOT_PASSWORD=${PASSWORD} \
     ${MYSQL_IMAGE}
@@ -299,18 +303,19 @@ while true; do
     sleep 5
 done
 
-if docker ps -a | grep -q mysql-client; then
+if docker ps -a | grep mysql-client &>/dev/null; then
     log "检测到 mysql-client 容器已存在"
 else
     log "创建 mysql-client 容器"
     docker run --name mysql-client -d --net=host \
     -v /var/run/mysql:/var/run/mysql \
-    docker-bkrepo.cwoa.net/ce1b09/weops-docker/mysql_config_editor:8.0.43 sleep infinity
+    -v ~/.mylogin.cnf:/root/.mylogin.cnf \
+    ${MYSQL_CLIENT_IMAGE} sleep infinity
 fi
 
 if ! [ -f "/usr/bin/mysql" ]; then
     log "配置 mysql 命令"
-    echo 'docker exec -it mysql-client mysql "$@"' > /usr/bin/mysql
+    echo 'docker exec -it mysql mysql "$@"' > /usr/bin/mysql
     chmod +x /usr/bin/mysql
 fi
 

@@ -13,6 +13,9 @@ MYSQL_USER=
 MYSQL_PASSWORD=
 HOST_LIST=
 
+# 加载版本
+source /data/install/weops_version
+
 usage () {
     cat <<EOF
 用法: 
@@ -107,22 +110,22 @@ fi
 if ! [[ $HOST_LIST =~ ^[0-9.,]+$ ]]; then
     warning "--host 指定的格式不对，逗号分隔的ip列表，无空格字符。"
 fi
-if ! command -v mysql &>/dev/null; then
-    warning "mysql命令不存在,请检查mysql是否安装成功,PATH是否包含正确路径"
-fi
-if ! command -v mysqladmin &>/dev/null; then
-    warning "mysqladmin命令不存在,请检查mysql是否安装成功,PATH是否包含正确路径"
-fi
+# if ! command -v mysql &>/dev/null; then
+#     warning "mysql命令不存在,请检查mysql是否安装成功,PATH是否包含正确路径"
+# fi
+# if ! command -v mysqladmin &>/dev/null; then
+#     warning "mysqladmin命令不存在,请检查mysql是否安装成功,PATH是否包含正确路径"
+# fi
 if (( EXITCODE > 0 )); then
     usage_and_exit "$EXITCODE"
 fi
 
 #先判断login-path是否正确能连上，然后循环遍历HOST_LIST授权。
-if mysqladmin --login-path="$LOGIN_PATH" ping >/dev/null ; then
+if docker exec mysql mysqladmin --login-path="$LOGIN_PATH" ping >/dev/null ; then
     IFS="," read -r -a hosts <<<"$HOST_LIST"
     for h in "${hosts[@]}"; do
         GRANT_SQL="GRANT ALL ON *.* TO $MYSQL_USER@$h IDENTIFIED BY '$MYSQL_PASSWORD'"
-        if ! docker exec -i mysql-client mysql --login-path="$LOGIN_PATH" -e "$GRANT_SQL"; then
+        if ! docker exec -i mysql mysql --login-path="$LOGIN_PATH" -e "$GRANT_SQL"; then
             error "给 $MYSQL_USER@$h 授权失败"
         else
             log "$MYSQL_USER@$h 授权成功"

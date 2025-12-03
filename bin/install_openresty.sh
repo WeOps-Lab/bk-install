@@ -14,6 +14,8 @@ EXITCODE=0
 PREFIX=/data/bkee
 OPENRESTY_VERSION=1.27.1.1-1~jammy1
 
+source /data/install/weops_version
+
 usage () {
     cat <<EOF
 用法: 
@@ -135,7 +137,7 @@ docker run -d \
     -v /data/bkce/paas_agent/apps/projects:/data/bkce/paas_agent/apps/projects \
     -v /data/bkce/job/frontend:/data/bkce/job/frontend \
     -v "$PREFIX"/logs/nginx:"$PREFIX"/logs/nginx \
-    docker-bkrepo.cwoa.net/ce1b09/weops-docker/openresty:1.27.1.1-2
+    ${NGINX_IMAGE}
 
 # systemctl enable --now openresty
 # systemctl status openresty

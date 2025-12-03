@@ -164,7 +164,7 @@ action_monitorv3 () {
     local action=$1
     local project=$2
     if [[ ${project} = 'monitor' ]];then
-        docker ${action} bk-monitorv3-monitor
+        docker ${action} bkmonitorv3-monitor
     else
         systemctl ${action} bk-${project}.service
     fi

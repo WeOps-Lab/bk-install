@@ -45,11 +45,11 @@ check_agreement || exit 1
 IS_HA_DEPLOY=no
 case $service in
     common)
-        if [ "IS_HA_DEPLOY" == "no" ]; then
-            sed -i '/^redis_sentinel:/,/master_name: mymaster/s/^/# /' ${SELF_DIR}/bin/default/port.yaml
-            sed -i "s/'redis_sentinel',//g" ${SELF_DIR}/qq.py
-            sed -i 's/redis-sentinel.service.consul:26379/redis.service.consul:6379/g' ${SELF_DIR}/bin/default/bkiam.env
-            find ${SELF_DIR}/bin/default/ -type f -exec grep -l "REDIS_MODE=sentinel" {} \; | xargs sed -i 's/REDIS_MODE=sentinel/REDIS_MODE=standalone/g'
+        if [ "$IS_HA_DEPLOY" == "no" ]; then
+            sed -i '/^redis_sentinel:/,/master_name: mymaster/s/^/# /' /data/install/bin/default/port.yaml
+            sed -i "s/'redis_sentinel',//g" /data/install/qq.py
+            sed -i 's/redis-sentinel.service.consul:26379/redis.service.consul:6379/g' /data/install/bin/default/bkiam.env
+            find /data/install/bin/default/ -type f -exec sed -i -E 's/([A-Z_]*REDIS_MODE[[:space:]]*=[[:space:]]*")?sentinel(")?/\1standalone\2/g' {} \;
         fi
         _bkc install controller
         _bkc install bkenv
@@ -59,7 +59,7 @@ case $service in
         _bkc sync cert
         _bkc install cert
         _bkc install yum
-        if [ "IS_HA_DEPLOY" == "yes" ]; then
+        if [ "$IS_HA_DEPLOY" == "yes" ]; then
             _bkc install nfs
         fi
         ./bkcli install controller 1 # 安装EPEL源默认不提供的rpm包
@@ -74,7 +74,7 @@ case $service in
         _bkc install license
         _bkc install mysql
         _bkc install redis
-        if [ "IS_HA_DEPLOY" == "yes" ]; then
+        if [ "$IS_HA_DEPLOY" == "yes" ]; then
             _bkc install redis_sentinel
         fi
         _bkc start mysql
@@ -82,7 +82,7 @@ case $service in
 
         _bkc start license
         _bkc start redis
-        if [ "IS_HA_DEPLOY" == "yes" ]; then
+        if [ "$IS_HA_DEPLOY" == "yes" ]; then
             _bkc start redis_sentinel
         fi
         _bkc start nginx

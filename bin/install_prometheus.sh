@@ -245,24 +245,34 @@ else
     install -d -g 1001 -o 1001 /data/weops/prometheus/rules
 fi
 
-if systemctl is-active --quiet weops-template; then
-    warning "weops-template service already exists, skip."
-else
-    cat << "EOF" > /usr/lib/systemd/system/weops-template.service
-[Unit]
-Description=Generic template rendering and notifications with Consul for weops proxy
-Documentation=https://wedoc.canway.net
-After=network-online.target
-Wants=network-online.target
+# if systemctl is-active --quiet weops-template; then
+#     warning "weops-template service already exists, skip."
+# else
+#     cat << "EOF" > /usr/lib/systemd/system/weops-template.service
+# [Unit]
+# Description=Generic template rendering and notifications with Consul for weops proxy
+# Documentation=https://wedoc.canway.net
+# After=network-online.target
+# Wants=network-online.target
 
-[Service]
-ExecStart=/usr/bin/consul-template -consul-addr 127.0.0.1:8501 -config /data/weops/prometheus/extra_rules.hcl
-ExecReload=/bin/kill -HUP $MAINPID
-KillSignal=SIGINT
+# [Service]
+# ExecStart=/usr/bin/consul-template -consul-addr 127.0.0.1:8501 -config /data/weops/prometheus/extra_rules.hcl
+# ExecReload=/bin/kill -HUP $MAINPID
+# KillSignal=SIGINT
 
-[Install]
-WantedBy=multi-user.target
-EOF
+# [Install]
+# WantedBy=multi-user.target
+# EOF
+# fi
+
+if ! docker ps -a | grep weops-template;then
+docker run -d \
+    --name weops-template \
+    --restart always \
+    --net host \
+    -v /data/weops/prometheus:/data/weops/prometheus \
+    ${CONSUL_TEMPLATE_IMAGE} \
+    /usr/bin/consul-template -consul-addr 127.0.0.1:8501 -config /data/weops/prometheus/extra_rules.hcl
 fi
 
 if [[ $(docker ps -a | grep prometheus) ]]; then
@@ -285,7 +295,7 @@ docker run -d --restart=always --net=host \
 --web.enable-lifecycle \
 --config.file=/opt/bitnami/prometheus/conf/prometheus.yml --storage.tsdb.retention.time=30m
 
-systemctl enable --now weops-template
+# systemctl enable --now weops-template
 if [[ $PROMETHEUS_MASTER == "true" ]]; then
   if [[ -f /etc/consul.d/service/prometheus.json ]]; then
     warning "Consul service definition already exists, overwrite it."
@@ -305,7 +315,7 @@ if [[ $PROMETHEUS_MASTER == "true" ]]; then
     }
 }
 EOF
-  consul reload
+  docker exec bk-consul consul reload
 else
   if [[ -f /etc/consul.d/service/prometheus.json ]]; then
     warning "Consul service definition already exists, delete it."
@@ -325,5 +335,5 @@ else
     }
 }
 EOF
-  consul reload
+  docker exec bk-consul consul reload
 fi

@@ -80,5 +80,5 @@ server {
 EOF
 
 log "reload nginx"
-/usr/local/openresty/nginx/sbin/nginx -s reload
+docker exec nginx /usr/local/openresty/nginx/sbin/nginx -s reload
 log "reload done"

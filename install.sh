@@ -421,6 +421,7 @@ install_mongodb () {
     # 根据MONGODB模块数量判断是否安装rs模式
     # 所有模式都为rs模式
     emphasize "Configure MongoDB to RS mode"
+    source "${SELF_DIR}"/utils.fc 
     "${SELF_DIR}"/pcmd.sh -m "${module}" "${CTRL_DIR}/bin/setup_mongodb_rs.sh -a config -e '${BK_MONGODB_KEYSTR_32BYTES}' -j '${BK_MONGODB_IP_COMMA}'"
     "${SELF_DIR}"/pcmd.sh -H "${BK_MONGODB_IP0}" "${CTRL_DIR}/bin/setup_mongodb_rs.sh -a init -j '${BK_MONGODB_IP_COMMA}' -u '$BK_MONGODB_ADMIN_USER' -p '$BK_MONGODB_ADMIN_PASSWORD' -P '${port}'"
 
@@ -1398,8 +1399,9 @@ install_prometheus () {
 install_echart () {
     local module=echarts
     emphasize "install echarts on host: ${BK_ECHARTS_IP_COMMA}"
+    source ${CTRL_DIR}/weops_version
     for ip in ${BK_ECHARTS_IP[@]}; do
-        "${SELF_DIR}"/pcmd.sh -H "${ip}" "docker rm -f echart || echo container echart does not exist ;docker run -d --restart=always --net=host --name=repo.service.consul:8181/ssr-echarts:latest"
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "docker rm -f echart || echo container echart does not exist ;docker run -d --restart=always --net=host --name=echart ${ECHARTS_IMAGE}"
         reg_consul_svc echart 3000 "${ip}"
     done
 }
@@ -1409,7 +1411,13 @@ install_vault () {
     emphasize "create database for vault"
     mysql --login-path=mysql-default -e "CREATE DATABASE IF NOT EXISTS vault;"
     emphasize "grant mysql privilege for vault"
-    ssh $BK_MYSQL_MASTER_IP "mysql --login-path=default-root -e \"GRANT ALL PRIVILEGES ON *.* TO 'root'@\"${BK_VAULT_INIT_IP}\" IDENTIFIED BY \"${BK_MYSQL_ADMIN_PASSWORD}\";"
+    master_ip=`cat install.config | grep 'mysql(master)' | awk '{print $1}'`
+    if [ -n "$master_ip" ];then
+            mysql_ip=$BK_MYSQL_MASTER_IP0
+    else
+            mysql_ip=$BK_MYSQL_IP0
+    fi
+    ssh $mysql_ip 'docker exec mysql mysql --login-path=default-root -e "GRANT ALL PRIVILEGES ON *.* TO root@\"'"${BK_VAULT_INIT_IP}"'\" IDENTIFIED BY \"'"${BK_MYSQL_ADMIN_PASSWORD}"'\";"'
     emphasize "install vault init node on host: ${BK_VAULT_INIT_IP}"
     "${SELF_DIR}"/pcmd.sh -H "${BK_VAULT_INIT_IP}" "${CTRL_DIR}/bin/install_weops_vault.sh -i -s mysql-default.service.consul -p ${BK_MYSQL_ADMIN_PASSWORD} -P 3306 -u ${BK_MYSQL_ADMIN_USER}"
     reg_consul_svc vault 8200 "${BK_VAULT_INIT_IP}"
@@ -1456,24 +1464,40 @@ install_weopsrdp () {
         "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_weops_rdp.sh -I /o/ -s ${BK_PAAS_PUBLIC_URL}" 
     done
     emphasize "update consul kv"
-    docker exec -i bk-consul consul kv put bkapps/upstreams/prod/views "[\"${BK_WEOPSRDP_IP0}:8082\",\"${BK_WEOPSRDP_IP1}:8082 backup\"]"
+    weopsrdp_consul_value="["
+    weopsrdp_consul_value+="\"${BK_WEOPSRDP_IP[0]}:8082\","
+    if [ ${#BK_WEOPSRDP_IP[@]} -gt 1 ]; then
+        # 从第二个元素开始遍历（索引从0开始，所以从1开始）
+        for ((i=1; i<${#BK_WEOPSRDP_IP[@]}; i++)); do
+            weopsrdp_consul_value+="\"${BK_WEOPSRDP_IP[i]}:8082 backup\","
+        done
+    fi
+    weopsrdp_consul_value="${weopsrdp_consul_value%,}]"
+    echo $weopsrdp_consul_value
+
+    docker exec -i bk-consul consul kv put bkapps/upstreams/prod/views "${weopsrdp_consul_value}"
     emphasize "reload nginx"
-    "${SELF_DIR}"/pcmd.sh -m nginx 'systemctl reload consul-template && /usr/local/openresty/nginx/sbin/nginx -s reload'
+    "${SELF_DIR}"/pcmd.sh -m nginx 'docker restart consul-template && docker exec nginx /usr/local/openresty/nginx/sbin/nginx -s reload'
 }
 
 install_minio () {
     local module=minio
     emphasize "install minio on host: ${BK_MINIO_IP_COMMA}"
     minio_server_list=""
+    local consul_value="["
     for ip in "${BK_MINIO_IP[@]}"; do
         minio_server_list+="http://$ip:9015/data "
+        consul_value+="\"${ip}:9015\","
     done
     minio_server_list=$(echo $minio_server_list | sed 's/ $//')
+    consul_value="${consul_value%,}]"
     for ip in ${BK_MINIO_IP[@]}; do
         "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_minio.sh -a ${WEOPS_MINIO_ACCESS_KEY} -s ${WEOPS_MINIO_SECRET_KEY} -l \"${minio_server_list}\""
         reg_consul_svc minio 9015 "${ip}"
     done
-    docker exec -i bk-consul consul kv put bkapps/upstreams/prod/minio "[\"${BK_MINIO_IP0}:9015\",\"${BK_MINIO_IP1}:9015\",\"${BK_MINIO_IP2}:9015\",\"${BK_MINIO_IP3}:9015\"]"
+    docker exec -i bk-consul consul kv put bkapps/upstreams/prod/oss "${consul_value}"
+    # 更新 nginx
+    docker restart consul-template
 }
 
 install_casbinmesh () {

@@ -8,6 +8,7 @@ VERSION=1.0
 EXITCODE=0
 
 source "${SELF_DIR}"/../load_env.sh
+source /data/install/weops_version
 
 
 usage () {
@@ -219,5 +220,5 @@ docker run -d \
     -v /etc/consul-template:/etc/consul-template \
     -v /usr/local/openresty/nginx:/usr/local/openresty/nginx \
     -v /var/run/docker.sock:/var/run/docker.sock \
-    docker-bkrepo.cwoa.net/ce1b09/weops-docker/consul-template:0.25.1.1 \
+    ${CONSUL_TEMPLATE_IMAGE} \
     /usr/bin/consul-template -config /etc/consul-template/conf.d

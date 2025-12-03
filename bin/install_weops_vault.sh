@@ -122,5 +122,7 @@ if [[ "$INIT" == true ]]; then
     docker exec vault sh -c "export VAULT_ADDR=http://127.0.0.1:8200 && vault operator init -key-shares=1 -key-threshold=1" > /data/vault.secret
     export VAULT_TOKEN=$(cat /data/vault.secret | grep "Initial Root Token" | awk '{print $4}')
     log "enable kv secret"
+    export VAULT_UNSEAL_CODE=$(cat /data/vault.secret | grep "Unseal Key 1" | awk '{print $4}')
+    docker exec vault sh -c "export VAULT_ADDR=http://127.0.0.1:8200 && vault operator unseal ${VAULT_UNSEAL_CODE}"
     docker exec vault sh -c "export VAULT_ADDR=http://127.0.0.1:8200;export VAULT_TOKEN=${VAULT_TOKEN};vault secrets enable -path=secret kv"
 fi
