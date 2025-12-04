@@ -1497,7 +1497,7 @@ install_minio () {
     done
     docker exec -i bk-consul consul kv put bkapps/upstreams/prod/oss "${consul_value}"
     # 更新 nginx
-    docker restart consul-template
+    "${SELF_DIR}"/pcmd.sh -n nginx 'docker restart consul-template'
 }
 
 install_casbinmesh () {

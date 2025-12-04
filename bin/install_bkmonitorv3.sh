@@ -242,7 +242,7 @@ case $BKMONITOR_MODULE in
         ENV_VARS+="export ES7_PASSWORD=$ES7_PASSWORD;"
         ENV_VARS+="export KAFKA_HOST=$KAFKA_HOST;"
         ENV_VARS+="export KAFKA_PORT=$KAFKA_PORT;"
-        if [[ -n $BK_INFLUXDB_BKMONITORV3_IP1 ]]; then
+        if [[ -n ${BK_INFLUXDB_BKMONITORV3_IP1:-} ]]; then
             ENV_VARS+="export INFLUXDB_BKMONITORV3_IP1=$INFLUXDB_BKMONITORV3_IP1;"
         fi
         docker run -itd \
