@@ -832,6 +832,11 @@ install_consul_template () {
     local install_ip=$2
     emphasize "install consul template on host: ${install_ip}"
     "${SELF_DIR}"/pcmd.sh -H "${install_ip}"  "${CTRL_DIR}/bin/install_consul_template.sh -m ${install_module}"
+    # 修改 client_max_body_size
+    if [[ $install_module == 'nginx' ]]; then 
+        emphasize "configure nginx client_max_body_size on host: ${install_ip}"
+        "${SELF_DIR}"/pcmd.sh -m "${install_module}" "sed -i 's/client_max_body_size[[:space:]]\+512m;/client_max_body_size    2048m;/'  /etc/consul-template/templates/paas.conf"
+    fi
     emphasize "start and reload consul-template on host: ${install_ip}"
     # 启动后需要reload，防止这台ip已经启动过consul-template，如果不reload，没法生效新安装的子配置
     "${SELF_DIR}"/pcmd.sh -H "${install_ip}" "docker restart consul-template"
@@ -1497,7 +1502,7 @@ install_minio () {
     done
     docker exec -i bk-consul consul kv put bkapps/upstreams/prod/oss "${consul_value}"
     # 更新 nginx
-    "${SELF_DIR}"/pcmd.sh -n nginx 'docker restart consul-template'
+    "${SELF_DIR}"/pcmd.sh -m nginx 'docker restart consul-template'
 }
 
 install_casbinmesh () {
@@ -1570,7 +1575,7 @@ install_age () {
 install_kafkaadapter () {
     local module=kafkaadapter
     emphasize "install kafkaadapter on host: ${BK_KAFKAADAPTER_IP_COMMA}"
-    APP_AUTH_TOKEN=$(mysql --login-path=mysql-default -Ne "select auth_token from open_paas.paas_app where code='weops_saas';")
+    APP_AUTH_TOKEN=$(mysql --login-path=mysql-default -N -s -e "select auth_token from open_paas.paas_app where code='weops_saas';")
     if [[ -z ${APP_AUTH_TOKEN} ]]; then
         emphasize "get app auth token failed"
         exit 1
