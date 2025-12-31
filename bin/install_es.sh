@@ -7,6 +7,8 @@ PROGRAM=$(basename "$0")
 VERSION=1.0
 EXITCODE=0
 
+source /data/install/weops_version
+
 # 全局默认变量
 ES_VERSION="7.17.26"
 BIND_ADDR="127.0.0.1"
@@ -105,6 +107,24 @@ while (( $# > 0 )); do
     shift 
 done 
 
+check_port_alive () {
+    local port=$1
+
+    lsof -i:$port -sTCP:LISTEN 1>/dev/null 2>&1
+
+    return $?
+}
+wait_port_alive () {
+    local port=$1
+    local timeout=${2:-10}
+
+    for i in $(seq $timeout); do
+        check_port_alive $port && return 0
+        sleep 1
+    done
+    return 1
+}
+
 # 参数合法性有效性校验，这可以使用通用函数校验。
 if ! [[ "$ES_TRANSPORT_PORT" =~ [0-9]+ ]]; then # 其实要判断是否在1<port<65545之间
     error "ES_TRANSPORT 端口不是字符串"
@@ -136,18 +156,18 @@ if (( EXITCODE > 0 )); then
 fi
 
 # 安装
-if ! dpkg -l elasticsearch &>/dev/null; then
-    log "apt install elasticsearch-${ES_VERSION}"
-    unset JAVA_HOME
-    apt -y install elasticsearch="${ES_VERSION}" || error "elsticsearch7 安装失败"
-    if ! dpkg -l elasticsearch | grep -q "${ES_VERSION}" &>/dev/null;then
-        error "elasticsearch7 安装失败"
-    fi
-fi
+# if ! dpkg -l elasticsearch &>/dev/null; then
+#     log "apt install elasticsearch-${ES_VERSION}"
+#     unset JAVA_HOME
+#     apt -y install elasticsearch="${ES_VERSION}" || error "elsticsearch7 安装失败"
+#     if ! dpkg -l elasticsearch | grep -q "${ES_VERSION}" &>/dev/null;then
+#         error "elasticsearch7 安装失败"
+#     fi
+# fi
 
 # 创建目录
 log "创建$DATA_DIR/ $LOG_DIR/目录"
-install -o "elasticsearch" -g "elasticsearch" -d "$DATA_DIR/" "$LOG_DIR/"
+install -d -m 755 -o 1000 -g 1000 "$DATA_DIR/" "$LOG_DIR/" /etc/elasticsearch
 
 
 # 修改内核参数
@@ -161,19 +181,20 @@ else
     fi
 fi
 sysctl -p >/dev/null
+sysctl -p /etc/sysctl.d/elasticsearch.conf >/dev/null
 
-# 修改elasticsearch的max open files
-if [[ -d /etc/security/limits.d/ ]]; then
-    if ! grep -q elasticsearch /etc/security/limits.d/elasticsearch.conf 2>/dev/null; then
-        echo 'elasticsearch soft nofile 204800' >> /etc/security/limits.d/elasticsearch.conf
-        echo 'elasticsearch hard nofile 204800' >> /etc/security/limits.d/elasticsearch.conf
-    fi
-else
-    if ! grep -q elasticsearch /etc/security/limits.conf 2>/dev/null; then
-        echo 'elasticsearch soft nofile 204800' >> /etc/security/limits.conf
-        echo 'elasticsearch hard nofile 204800' >> /etc/security/limits.conf
-    fi
-fi
+# # 修改elasticsearch的max open files
+# if [[ -d /etc/security/limits.d/ ]]; then
+#     if ! grep -q elasticsearch /etc/security/limits.d/elasticsearch.conf 2>/dev/null; then
+#         echo 'elasticsearch soft nofile 204800' >> /etc/security/limits.d/elasticsearch.conf
+#         echo 'elasticsearch hard nofile 204800' >> /etc/security/limits.d/elasticsearch.conf
+#     fi
+# else
+#     if ! grep -q elasticsearch /etc/security/limits.conf 2>/dev/null; then
+#         echo 'elasticsearch soft nofile 204800' >> /etc/security/limits.conf
+#         echo 'elasticsearch hard nofile 204800' >> /etc/security/limits.conf
+#     fi
+# fi
 
 # 生成es的node-id
 myid=
@@ -200,8 +221,8 @@ node.master: true
 node.data: true
 node.name: elasticsearch-$myid
 node.attr.tag: cold
-path.data: $DATA_DIR/
-path.logs: $LOG_DIR/
+path.data: /usr/share/elasticsearch/data/
+path.logs: /usr/share/elasticsearch/logs/
 bootstrap.memory_lock: false
 bootstrap.system_call_filter: false
 network.host: $BIND_ADDR
@@ -218,9 +239,9 @@ cluster.initial_master_nodes: $ip_list
 cluster.max_shards_per_node: 10000
 
 EOF
-    log "修改jvm最大内存堆大小为2G"
-    sed -i "s/^## -Xmx.*g/-Xmx2g/g" /etc/elasticsearch/jvm.options
-    sed -i "s/^## -Xms.*g/-Xms2g/g" /etc/elasticsearch/jvm.options
+    # log "修改jvm最大内存堆大小为2G"
+    # sed -i "s/^## -Xmx.*g/-Xmx2g/g" /etc/elasticsearch/jvm.options
+    # sed -i "s/^## -Xms.*g/-Xms2g/g" /etc/elasticsearch/jvm.options
 else
     log "部署${SERVER_NUM}节点集群ES"
     # 生成 es 配置文件
@@ -231,8 +252,8 @@ node.master: true
 node.data: true
 node.name: elasticsearch-$myid
 node.attr.tag: cold
-path.data: $DATA_DIR/
-path.logs: $LOG_DIR/
+path.data: /usr/share/elasticsearch/data/
+path.logs: /usr/share/elasticsearch/logs/
 bootstrap.memory_lock: true
 bootstrap.system_call_filter: false
 network.host: $BIND_ADDR
@@ -248,24 +269,50 @@ cluster.routing.allocation.same_shard.host: true
 cluster.initial_master_nodes: $ip_list
 cluster.max_shards_per_node: 10000
 EOF
-    log "修改jvm最大内存堆大小为2G"
-    sed -i "s/^## -Xmx.*g/-Xmx2g/g" /etc/elasticsearch/jvm.options
-    sed -i "s/^## -Xms.*g/-Xms2g/g" /etc/elasticsearch/jvm.options
+    # log "修改jvm最大内存堆大小为2G"
+    # sed -i "s/^## -Xmx.*g/-Xmx2g/g" /etc/elasticsearch/jvm.options
+    # sed -i "s/^## -Xms.*g/-Xms2g/g" /etc/elasticsearch/jvm.options
 fi
+
+if docker ps -a | awk '{print $NF}' | grep -wq "es"; then
+  log "检测到已存在的 elasticsearch,删除"
+  docker rm -f es
+fi
+
+log "启动 elasticsearch 容器"
+docker run -d \
+    --name es \
+    --restart always \
+    --net host \
+    -v /etc/elasticsearch/${CONF_NAME}:/usr/share/elasticsearch/config/elasticsearch.yml \
+    -v ${DATA_DIR}:/usr/share/elasticsearch/data \
+    -v ${LOG_DIR}:/usr/share/elasticsearch/logs \
+    --ulimit nofile=204800:204800 \
+    --ulimit memlock=-1:-1 \
+    -e "ES_JAVA_OPTS=-Xms2g -Xmx2g" \
+    $ES7_IMAGE
+
+log "等待 elasticsearch 启动"
+wait_port_alive $ES_REST_PORT 10
+log "elasticsearch 启动成功"
+# log "设置zookeeper开机启动"
+# systemctl enable zookeeper
+# # --no-block可以防止bootstrap阶段选举集群时启动卡住
+# systemctl --no-block start zookeeper
 
 # 启动es
-log "启动elasticsearch"
-sed -i '/Service/a LimitMEMLOCK=infinity' /lib/systemd/system/elasticsearch.service
-systemctl daemon-reload
-systemctl start elasticsearch.service
+# log "启动elasticsearch"
+# # sed -i '/Service/a LimitMEMLOCK=infinity' /lib/systemd/system/elasticsearch.service
+# systemctl daemon-reload
+# systemctl start elasticsearch.service
 
-log "检查elasticsearch 状态"
-if ! systemctl status "elasticsearch"; then
-    log "请检查启动日志，使用命令：journalctl -u elasticsearch 查看失败原因"
-    log "手动修复后，使用命令：systemctl start elasticsearch 启动并确认是否启动成功"
-    log "启动成功后，使用命令：systemctl enable elasticsearch 设置开机启动"
-    exit 100
-else
-    log "设置Es实例 elasticsearch 开机启动"
-    systemctl enable "elasticsearch"
-fi
+# log "检查elasticsearch 状态"
+# if ! systemctl status "elasticsearch"; then
+#     log "请检查启动日志，使用命令：journalctl -u elasticsearch 查看失败原因"
+#     log "手动修复后，使用命令：systemctl start elasticsearch 启动并确认是否启动成功"
+#     log "启动成功后，使用命令：systemctl enable elasticsearch 设置开机启动"
+#     exit 100
+# else
+#     log "设置Es实例 elasticsearch 开机启动"
+#     systemctl enable "elasticsearch"
+# fi

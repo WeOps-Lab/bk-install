@@ -98,6 +98,21 @@ if [[ -z "$LOGIN_PATH" || -z "$USERNAME" || -z "$PASSWORD" || -z "$HOST" ]]; the
     usage_and_exit 1
 fi
 
+if docker ps -a | grep -q mysql-client; then
+    log "检测到 mysql-client 容器已存在"
+else
+    log "创建 mysql-client 容器"
+    docker run --name mysql-client -d --net=host \
+    -v /var/run/mysql:/var/run/mysql \
+    docker-bkrepo.cwoa.net/ce1b09/weops-docker/mysql_config_editor:8.0.43 sleep infinity
+fi
+
+if ! [ -f "/usr/bin/mysql_config_editor" ]; then
+    log "配置 mysql_config_editor 命令"
+    echo 'docker exec -i mysql-client mysql_config_editor "$@"' > /usr/bin/mysql_config_editor
+    chmod +x /usr/bin/mysql_config_editor
+fi
+
 if [[ -S $HOST ]]; then
     # is a socket dest
     expect -c "

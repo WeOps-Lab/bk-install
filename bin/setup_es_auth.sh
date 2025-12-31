@@ -21,6 +21,8 @@ GET_CERT_CONFIG=0
 SET_PASSSWD=0
 AUTH_CONFIG=0
 
+esCli="docker exec es"
+es_certificates_path="/usr/share/elasticsearch/config/elastic-certificates.p12"
 
 usage () {
     cat <<EOF
@@ -104,26 +106,24 @@ done
 # 参数合法性有效性校验，这些可以使用通用函数校验。
 
 # 安装
-if ! dpkg -l elasticsearch &>/dev/null; then
-    error "$NAME 未安装"
-fi
+# if ! dpkg -l elasticsearch &>/dev/null; then
+#     error "$NAME 未安装"
+# fi
 
 # -g,则重新生成鉴权文件
 
 if [  $GET_CERT_CONFIG  -eq 1 ];then
-    if  ! [ -f /etc/elasticsearch/elastic-certificates.p12  ];then
-        unset JAVA_HOME
+    if  ! $esCli ls $es_certificates_path &>/dev/null;then
         log "生成证书文件elastic-certificates.p12 "
-        $PREFIX/bin/elasticsearch-certutil cert -out /etc/elasticsearch/elastic-certificates.p12 -pass "" > /dev/null 2>&1
-        chown -R $NAME:$NAME /etc/elasticsearch//elastic-certificates.p12
+        $esCli elasticsearch-certutil cert -out $es_certificates_path -pass "" > /dev/null 2>&1
+        $esCli chown -R $NAME:$NAME $es_certificates_path
     else
         log "删除原证书文件elastic-certificates.p12 "
-        rm -f /etc/elasticsearch/elastic-certificates.p12
-        unset JAVA_HOME
+        $esCli rm -f $es_certificates_path
         log " 生成证书文件elastic-certificates.p12 "
-        $PREFIX/bin/elasticsearch-certutil cert -out /etc/elasticsearch/elastic-certificates.p12 -pass ""   >/dev/null 2>&1
+        $esCli elasticsearch-certutil cert -out $es_certificates_path -pass ""   >/dev/null 2>&1
         if [ $? -eq 0 ];then
-            chown -R $NAME:$NAME /etc/elasticsearch//elastic-certificates.p12
+            $esCli chown -R $NAME:$NAME $es_certificates_path
         else
             error "生成证书失败"
         fi
@@ -146,34 +146,34 @@ xpack.security.transport.ssl.truststore.path: elastic-certificates.p12
 EOF
     # 重启es
     log "重启es"
-    systemctl restart elasticsearch.service >/dev/null 2>&1
-    log "检查${NAME} 状态"
-    if ! systemctl status "${NAME}" > /dev/null 2>&1; then
-        log "请检查启动日志，使用命令：journalctl -u ${NAME} 查看失败原因"
-        log "手动修复后，使用命令：systemctl start ${NAME} 启动并确认是否启动成功"
-        log "启动成功后，使用命令：systemctl enable ${NAME} 设置开机启动"
-        exit 100
-    fi
+    # systemctl restart elasticsearch.service >/dev/null 2>&1
+    docker restart es
+    # log "检查${NAME} 状态"
+    # if ! systemctl status "${NAME}" > /dev/null 2>&1; then
+    #     log "请检查启动日志，使用命令：journalctl -u ${NAME} 查看失败原因"
+    #     log "手动修复后，使用命令：systemctl start ${NAME} 启动并确认是否启动成功"
+    #     log "启动成功后，使用命令：systemctl enable ${NAME} 设置开机启动"
+    #     exit 100
+    # fi
 fi
 
 # -s ,则初始化es密码修改，并修改elastic用户密码
 if  [ $SET_PASSSWD  -eq 1 -o -z "$BIND_ADDR" -o -z "$ES_REST_PORT" ];then
-    log "检查es状态信息"
-    if ! systemctl status "${NAME}" > /dev/null 2>&1 ; then
-        log "请检查启动日志，使用命令：journalctl -u ${NAME} 查看失败原因"
-        log "手动修复后，使用命令：systemctl start ${NAME} 启动并确认是否启动成功"
-        log "启动成功后，使用命令：systemctl enable ${NAME} 设置开机启动"
-        exit 100
-    fi
+    # log "检查es状态信息"
+    # if ! systemctl status "${NAME}" > /dev/null 2>&1 ; then
+    #     log "请检查启动日志，使用命令：journalctl -u ${NAME} 查看失败原因"
+    #     log "手动修复后，使用命令：systemctl start ${NAME} 启动并确认是否启动成功"
+    #     log "启动成功后，使用命令：systemctl enable ${NAME} 设置开机启动"
+    #     exit 100
+    # fi
 
     log "检查证书文件"
-    if ! [[ -f /etc/elasticsearch/elastic-certificates.p12 ]];then
+    if ! $esCli ls $es_certificates_path;then
         error "certificates 文件不存在"
     fi
 
     temp_pass=$(mktemp /tmp/elasticsearch_XXXXXXX)
-    unset JAVA_HOME
-    $PREFIX/bin/elasticsearch-setup-passwords auto -b > "$temp_pass"
+    $esCli elasticsearch-setup-passwords auto -b > "$temp_pass"
     auto_pass=$(awk '/PASSWORD elastic/{print $4}' "$temp_pass") 
     PASSWORD_API="http://$BIND_ADDR:$ES_REST_PORT/_xpack/security/user/elastic/_password"
     json=$(cat <<EOF

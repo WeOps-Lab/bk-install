@@ -78,4 +78,5 @@ docker run --net=host -itd \
     --name=monstache \
     -e BK_CMDB_MONGODB_PASSWORD=$MONGODB_PASSWORD \
     -e BK_CMDB_ES7_PASSWORD=$ELASTICSEARCH_PASSWORD \
+    --privileged=true \
     ${MONSTACHE_IMAGE}

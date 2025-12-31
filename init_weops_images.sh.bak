@@ -1,30 +1,7 @@
 #!/bin/bash
-
-
-# 配置 hosts 解析
-contrl_ip=`cat /data/install/.controller_ip`
-/data/install/pcmd.sh -m all "
-if ! grep -q 'repo.service.consul' /etc/hosts; then
-  echo '$contrl_ip repo.service.consul' >> /etc/hosts
-fi
-"
-
-# 配置 Docker insecure-registries
-/data/install/pcmd.sh -m all "
-if [ ! -f /etc/docker/daemon.json ] || ! grep -q 'insecure-registries' /etc/docker/daemon.json; then
-  cat > /etc/docker/daemon.json <<DOCKEREOF
-{
-  \"insecure-registries\": [\"repo.service.consul:8181\", \"$contrl_ip:8181\"]
-}
-DOCKEREOF
-  systemctl daemon-reload
-  systemctl restart docker
-fi
-"
-
 docker load < /data/ubuntu/images/registry.tgz
 if [[ ! -f /opt/registry.conf ]];then
-    cat <<REGEOF > /opt/registry.conf
+    cat <<EOF > /opt/registry.conf
 version: 0.1
 log:
   fields:
@@ -34,7 +11,7 @@ http:
 storage:
   filesystem:
     rootdirectory: /data/registry
-REGEOF
+EOF
 fi
 
 if [[ ! $(docker ps -a|grep registry) ]];then

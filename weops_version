@@ -26,8 +26,9 @@ RABBITMQ_IMAGE="repo.service.consul:8181/rabbitmq:3.10.25"
 RABBITMQ_MANAGE_IMAGE="repo.service.consul:8181/rabbitmq:3.10.25-management"
 REDIS_SENTINEL_IMAGE="repo.service.consul:8181/redis-sentinel:5.0.14"
 ES7_IMAGE="repo.service.consul:8181/elasticsearch:7.17.26"
-
+PAAS_IMAGE="repo.service.consul:8181/paas:latest"
 BKMONITORV3_IMAGE="repo.service.consul:8181/bkmonitorv3:v3.6.3656"
-NODEMAN_IMAGE="repo.service.consul:8181/nodeman:bknodeman:v2.3.1"
+NODEMAN_IMAGE="repo.service.consul:8181/bknodeman:v2.3.1"
+USERMGR_IMAGE="repo.service.consul:8181/usermgr:latest"
 
-DOCKER_VERSION="5:20.10.24~3-0~ubuntu-jammy"
+DOCKER_VERSION="5:29.0.4-1~debian.12~bookworm"

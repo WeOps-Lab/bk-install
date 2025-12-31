@@ -7,15 +7,20 @@ action_paas () {
     local action=$1
     local project=$2
     if [[ -z ${project} ]]; then
-        systemctl $action bk-paas.target
+        for p in paas appengine esb login console apigw; do
+            # Check if container exists before action to avoid errors
+            if docker ps -a --format '{{.Names}}' | grep -q "^bk-paas-${p}$"; then
+                docker ${action} bk-paas-${p}
+            fi
+        done
     else
-        systemctl ${action} bk-paas-${project}.service
+        docker ${action} bk-paas-${project}
     fi
 }
 
 action_usermgr () {
     local action=$1
-    systemctl ${action} bk-usermgr.service
+    docker ${action} usermgr
 }
 
 action_consul () {
@@ -71,12 +76,21 @@ action_mongodb () {
 
 action_es7 () {
     local action=$1
-    systemctl ${action} elasticsearch.service
+    if [[ "$action" == "start" ]]; then
+        docker start es
+    elif [[ "$action" == "stop" ]]; then
+        docker stop es
+    elif [[ "$action" == "restart" ]]; then
+        docker restart es
+    else
+        echo "Usage: action_es7 {start|stop|restart}"
+        return 1
+    fi
 }
 
 action_influxdb () {
     local action=$1
-    docker ${action} influxdb
+    docker ${action} influx
 }
 
 action_license () {
@@ -121,13 +135,13 @@ action_cmdb () {
 
 action_consul_template () {
     local action=$1
-    systemctl ${action} consul-template.service
+    docker ${action} consul-template
 }
 
 action_nginx () {
     local action=$1
-    systemctl ${action} openresty.service
-    systemctl ${action} consul-template.service
+    docker ${action} nginx
+    docker ${action} consul-template
 }
 
 action_appo () {
@@ -157,14 +171,14 @@ action_job () {
 
 action_usermgr () {
     local action=$1
-    systemctl ${action} bk-usermgr.service
+    docker ${action} usermgr
 }
 
 action_monitorv3 () {
     local action=$1
     local project=$2
-    if [[ ${project} eq 'monitor' ]];do
-        docker ${action} bk-monitorv3-monitor
+    if [[ ${project} == 'monitor' ]];then
+        docker ${action} bkmonitorv3-monitor
     else
         systemctl ${action} bk-${project}.service
     fi

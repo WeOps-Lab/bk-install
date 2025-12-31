@@ -142,8 +142,8 @@ tweak_bk_user_manage () {
 tweak_usermgr () {
     sed -ri '/concurrency=8/s/concurrency=[0-9]+/concurrency=2/' "$BK_HOME"/etc/supervisor-usermgr-api.conf
     sed -ri '/gunicorn wsgi/s/-w [0-9]+/-w 2/' "$BK_HOME"/etc/supervisor-usermgr-api.conf
-    echo "restart bk-usermgr"
-    systemctl restart  bk-usermgr
+    echo "restart usermgr"
+    docker restart usermgr
 }
 
 # 调整节点管理后台的进程个数

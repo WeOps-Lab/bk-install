@@ -86,13 +86,14 @@ if [[ $(docker ps -a|grep age) ]]; then
     docker rm -f age
 fi
 
-cd /data/weops/age
+# cd /data/weops/age
 
 docker run --net=host -itd \
     --name=age \
     -e POSTGRES_USER=$POSTGRES_USER \
     -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
     -e POSTGRES_DB=$POSTGRES_DB \
-    -v ./data:/data/postgres \
+    -e PGDATA=/data/postgres \
+    -v /data/weops/age/data:/data/postgres \
     --restart=always \
     $AGE_IMAGE

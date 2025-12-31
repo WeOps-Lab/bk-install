@@ -88,13 +88,13 @@ fi
 
 # 安装openresty 如果未安装过
 # yum -y install openresty-${OPENRESTY_VERSION}
-apt install -y openresty=${OPENRESTY_VERSION}
+# apt install -y openresty=${OPENRESTY_VERSION}
 
 # 配置openresty符合蓝鲸需要
 install -d /usr/local/openresty/nginx/conf/conf.d
 
 # 创建nginx logs目录
-install -m 755 -o blueking -g blueking -d "$PREFIX"/logs/nginx
+install -m 755 -o 1000 -g 1000 -d "$PREFIX"/logs/nginx
 
 # 替换nginx.conf
 sed 's,{{ key "bkcfg/global/bk_home" }},'$PREFIX',' "${SELF_DIR}"/../support-files/templates/nginx/nginx.conf > /usr/local/openresty/nginx/conf/nginx.conf
@@ -104,7 +104,7 @@ sed 's,{{ key "bkcfg/global/bk_home" }},'$PREFIX',' "${SELF_DIR}"/../support-fil
 if ! [[ -f /etc/logrotate.d/nginx ]]; then
     cat <<EOF > /etc/logrotate.d/nginx
 ${PREFIX}/logs/nginx/*log {
-    create 0644 blueking blueking
+    create 0644 1000 1000
     daily
     rotate 10
     missingok
@@ -118,6 +118,24 @@ ${PREFIX}/logs/nginx/*log {
 EOF
 fi
 
+if docker ps -a | awk '{print $NF}' | grep -wq "nginx"; then
+  log "检测到已存在的 openresty,删除"
+  docker rm -f nginx
+fi
+
 # 启动openresty
-systemctl enable --now openresty
-systemctl status openresty
+docker run -d \
+    --name nginx \
+    --restart always \
+    --net host \
+    -v /usr/local/openresty/nginx/conf/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf \
+    -v /usr/local/openresty/nginx/conf/conf.d:/usr/local/openresty/nginx/conf/conf.d \
+    -v /data/bkce/public/bknodeman:/data/bkce/public/bknodeman \
+    -v /data/bkce/public/nginx/cache:/data/bkce/public/nginx/cache \
+    -v /data/bkce/paas_agent/apps/projects:/data/bkce/paas_agent/apps/projects \
+    -v /data/bkce/job/frontend:/data/bkce/job/frontend \
+    -v "$PREFIX"/logs/nginx:"$PREFIX"/logs/nginx \
+    docker-bkrepo.cwoa.net/ce1b09/weops-docker/openresty:1.27.1.1-2
+
+# systemctl enable --now openresty
+# systemctl status openresty

@@ -27,7 +27,7 @@ PYTHON_PATH=/opt/py36_e/bin/python3.6
 # 默认安装所有子模块
 MODULE="bkmonitorv3"
 PROJECTS=(influxdb-proxy transfer grafana monitor unify-query ingester)
-RPM_DEP=(gcc libmysqlclient-dev libevent-dev libxext6 libxrender1 fontconfig)
+RPM_DEP=(gcc libevent-dev libxext6 libxrender1 fontconfig)
 ENV_FILE=/data/install/bin/04-final/bkmonitorv3.env
 BIND_ADDR=127.0.0.1
 
@@ -224,26 +224,41 @@ case $BKMONITOR_MODULE in
             rm -vf /var/run/bkmonitorv3/celerybeat.pid /var/run/bkmonitorv3/monitor-supervisord.pid /var/run/bkmonitorv3/monitor-supervisord.sock
         fi
         # 生成docker用的supervisor配置文件
-        sed "s@/data/bkce/.envs/bkmonitorv3-monitor@/cache/.bk/env@" /data/bkce/etc/supervisor-bkmonitorv3-monitor.conf > /data/bkce/etc/supervisor-bkmonitorv3-monitor.docker.conf
-        sed -i 's@/cache/.bk/env/bin/python@/cache/.bk/env/bin/python3.6_e@g' /data/bkce/etc/supervisor-bkmonitorv3-monitor.docker.conf
+        sed "s@$PREFIX/.envs/bkmonitorv3-monitor@/cache/.bk/env@" $PREFIX/etc/supervisor-bkmonitorv3-monitor.conf > $PREFIX/etc/supervisor-bkmonitorv3-monitor.docker.conf
+        sed -i 's@/cache/.bk/env/bin/python@/cache/.bk/env/bin/python3.6_e@g' $PREFIX/etc/supervisor-bkmonitorv3-monitor.docker.conf
         # 生成docker用的on_migrate文件
-        sed "2,9s/^/#/" /data/bkce/bkmonitorv3/monitor/on_migrate > /data/bkce/bkmonitorv3/monitor/on_migrate.docker
-        chmod 0755 /data/bkce/bkmonitorv3/monitor/on_migrate.docker
+        sed "2,9s/^/#/" $PREFIX/bkmonitorv3/monitor/on_migrate > $PREFIX/bkmonitorv3/monitor/on_migrate.docker
+        chmod 0755 $PREFIX/bkmonitorv3/monitor/on_migrate.docker
         # 启动容器
         docker run -itd \
-        -v /data/bkce/bkmonitorv3/monitor:/data/bkce/bkmonitorv3/monitor \
-        -v /data/bkce/logs/bkmonitorv3:/data/bkce/logs/bkmonitorv3 \
-        -v /data/bkce/etc/supervisor-bkmonitorv3-monitor.docker.conf:/data/bkce/etc/supervisor-bkmonitorv3-monitor.conf:ro \
-        -v /data/bkce/bkmonitorv3/support-files/pkgs:/pkgs \
-        -v /data/bkce/bkmonitorv3/cert/saas_priv.txt:/data/bkce/bkmonitorv3/cert/saas_priv.txt:ro \
-        -e BK_FILE_PATH=/data/bkce/bkmonitorv3/cert/saas_priv.txt \
+        -v $PREFIX/bkmonitorv3/monitor:$PREFIX/bkmonitorv3/monitor \
+        -v $PREFIX/logs/bkmonitorv3:$PREFIX/logs/bkmonitorv3 \
+        -v $PREFIX/etc/supervisor-bkmonitorv3-monitor.docker.conf:$PREFIX/etc/supervisor-bkmonitorv3-monitor.conf:ro \
+        -v $PREFIX/bkmonitorv3/support-files/pkgs:/pkgs \
+        -v $PREFIX/bkmonitorv3/cert/saas_priv.txt:$PREFIX/bkmonitorv3/cert/saas_priv.txt:ro \
+        -e BK_FILE_PATH=$PREFIX/bkmonitorv3/cert/saas_priv.txt \
         -e PYTHON_BIN=/cache/.bk/env/bin/python3.6_e \
-        --net=host --name=bkmonitorv3-monitor -v /var/run/bkmonitorv3:/var/run/bkmonitorv3/ ${BKMONITORV3_IMAGE} bash -c "cd /data/bkce/bkmonitorv3/monitor && supervisord -n -c /data/bkce/etc/supervisor-bkmonitorv3-monitor.conf"
+        -e INFLUXDB_BKMONITORV3_IP0="$INFLUXDB_BKMONITORV3_IP0" \
+        -e INFLUXDB_BKMONITORV3_IP1="${INFLUXDB_BKMONITORV3_IP1:-}" \
+        -e INFLUXDB_BKMONITORV3_IP="$INFLUXDB_BKMONITORV3_IP" \
+        -e BK_MONITOR_INFLUXDB_HOST="$INFLUXDB_BKMONITORV3_IP" \
+        -e INFLUXDB_BKMONITORV3_PORT="$INFLUXDB_BKMONITORV3_PORT" \
+        -e INFLUXDB_BKMONITORV3_USER="$INFLUXDB_BKMONITORV3_USER" \
+        -e INFLUXDB_BKMONITORV3_PASS="$INFLUXDB_BKMONITORV3_PASS" \
+        -e BKMONITORV3_INFLUXDB_PROXY_HOST="$BKMONITORV3_INFLUXDB_PROXY_HOST" \
+        -e BKMONITORV3_INFLUXDB_PROXY_PORT="$BKMONITORV3_INFLUXDB_PROXY_PORT" \
+        -e ES7_HOST="$ES7_HOST" \
+        -e ES7_REST_PORT="$ES7_REST_PORT" \
+        -e ES7_USER="$ES7_USER" \
+        -e ES7_PASSWORD="$ES7_PASSWORD" \
+        -e KAFKA_HOST="$KAFKA_HOST" \
+        -e KAFKA_PORT="$KAFKA_PORT" \
+        --net=host --name=bkmonitorv3-monitor -v /var/run/bkmonitorv3:/var/run/bkmonitorv3/ ${BKMONITORV3_IMAGE} bash -c "cd $PREFIX/bkmonitorv3/monitor && supervisord -n -c $PREFIX/etc/supervisor-bkmonitorv3-monitor.conf"
         # 初始化数据同步zk和写入influxdb信息（可重复执行）
         (
             set +u +e
-            # 设置加密解释器用得变量
-            docker exec bkmonitorv3-monitor bash -c "export INFLUXDB_BKMONITORV3_IP0=$INFLUXDB_BKMONITORV3_IP0;export INFLUXDB_BKMONITORV3_IP1=$INFLUXDB_BKMONITORV3_IP1;export INFLUXDB_BKMONITORV3_PORT=$INFLUXDB_BKMONITORV3_PORT;export INFLUXDB_BKMONITORV3_USER=$INFLUXDB_BKMONITORV3_USER;export INFLUXDB_BKMONITORV3_PASS=$INFLUXDB_BKMONITORV3_PASS;export BKMONITORV3_INFLUXDB_PROXY_HOST=$BKMONITORV3_INFLUXDB_PROXY_HOST;export BKMONITORV3_INFLUXDB_PROXY_PORT=$BKMONITORV3_INFLUXDB_PROXY_PORT;export ES7_HOST=$ES7_HOST;export ES7_REST_PORT=$ES7_REST_PORT;export ES7_USER=$ES7_USER;export ES7_PASSWORD=$ES7_PASSWORD;export KAFKA_HOST=$KAFKA_HOST;export KAFKA_PORT=$KAFKA_PORT;bash -x on_migrate.docker 1>&2 2>/dev/null;"
+            # 容器已通过 -e 参数注入环境变量，直接执行即可
+            docker exec bkmonitorv3-monitor bash -c "cd $PREFIX/bkmonitorv3/monitor && bash -x on_migrate.docker"
         )
         ;;
     transfer) 

@@ -130,9 +130,9 @@ fi
 if ! [[ -r "$ENV_FILE" ]]; then
     warning "ENV_FILE: ($ENV_FILE) 不存在或者未指定"
 fi
-if ! [[ $($PYTHON_PATH --version 2>&1) = *Python* ]]; then
-    warning "$PYTHON_PATH 不是一个合法的python二进制"
-fi
+# if ! [[ $($PYTHON_PATH --version 2>&1) = *Python* ]]; then
+#    warning "$PYTHON_PATH 不是一个合法的python二进制"
+# fi
 if (( EXITCODE > 0 )); then
     usage_and_exit "$EXITCODE"
 fi
@@ -158,6 +158,8 @@ D /var/run/bknodeman 0755 blueking blueking
 EOF
 # 拷贝模块目录到$PREFIX
 rsync -a --delete "${MODULE_SRC_DIR}/$MODULE" "$PREFIX/"
+# 修正权限，确保容器内 blueking 用户可以读写
+chown -R blueking:blueking "$PREFIX/$MODULE"
 
 # 安装rpm依赖包，如果不存在
 if ! dpkg -l "${RPM_DEP[@]}" >/dev/null; then
@@ -185,6 +187,9 @@ if [ "$(docker ps -aq -f name=bknodeman-nodeman)" ]; then
     # 清理相关的pid文件
     rm -vf /var/run/bknodeman/{celerybeat.pid,nodeman-supervisord.pid,nodeman-supervisord.sock}
 fi
+
+mkdir -p /data/bkce/bknodeman/cert
+touch /data/bkce/bknodeman/cert/saas_priv.txt
 
 docker run -itd \
 -v /data/bkce/bknodeman/nodeman:/data/bkce/bknodeman/nodeman \

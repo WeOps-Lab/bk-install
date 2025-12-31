@@ -282,7 +282,7 @@ docker run -d \
 
 while true; do
     # 获取容器健康状态
-    STATUS=$(docker inspect --format='{{.State.Health.Status}}' "mysql")
+    STATUS=$(docker inspect --format='{{.State.Health.Status}}' "${CONTAINER_NAME}")
     
     # 判断状态
     if [[ "${STATUS}" == "healthy" ]]; then

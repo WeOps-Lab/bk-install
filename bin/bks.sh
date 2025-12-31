@@ -39,11 +39,11 @@ COLOR_YELLOW_FG=$'\033[33m'
 COLOR_BOLD=$'\033[1m'
 COLOR_RESET=$'\033[0m'
 # 配置高亮的颜色及关键词, 最终关键词前后均有空格, 确保只匹配到整个字段.
-colorful_err_patt="EXITED|FATAL|BACKOFF|failed|not-found|deactivating"  # 关键字, |分隔的词.
+colorful_err_patt="EXITED|FATAL|BACKOFF|failed|not-found|deactivating|Exited"  # 关键字, |分隔的词.
 colorful_err_color="$COLOR_RED_FG$COLOR_BOLD"  # 颜色
-colorful_warn_patt="STOPPED|inactive|reloading|activating"  # 关键字, |分隔的词.
+colorful_warn_patt="STOPPED|inactive|reloading|activating|Created"  # 关键字, |分隔的词.
 colorful_warn_color="$COLOR_YELLOW_FG$COLOR_BOLD"  # 颜色
-colorful_ok_patt="RUNNING|active"  # 关键字, |分隔的词.
+colorful_ok_patt="RUNNING|active|running|Up"  # 关键字, |分隔的词.
 colorful_ok_color="$COLOR_GREEN_FG$COLOR_BOLD"  # 颜色
 # 简单高亮下
 colorful (){
@@ -152,6 +152,26 @@ status_systemd (){
   done
 }
 
+# 新增：Docker 服务状态检测函数
+status_docker() {
+    debug "func: $FUNCNAME: $*"
+    # 构建 grep 正则表达式，支持多个服务名参数
+    local pattern=""
+    for p in "$@"; do
+        if [ -z "$pattern" ]; then
+            pattern="$p"
+        else
+            pattern="$pattern|$p"
+        fi
+    done
+    
+    # 使用 docker ps --format 来格式化输出，使其与 systemd 输出兼容
+    # 列：Service, Status, Description
+    # Status 使用 .State (e.g. running, exited)
+    # Description 使用 .Status (e.g. Up 2 hours, Exited (0) 3 hours ago)
+    docker ps -a --format "{{.Names}}\t{{.State}}\t{{.Status}}" | awk -F'\t' -v patt="$pattern" '$1 ~ patt'
+}
+
 expand_systemd_services (){
   list_systemd_services | awk -v systemd_unit_patt="$systemd_unit_patt" '
 BEGIN{
@@ -185,7 +205,7 @@ BEGINFILE{
 
 main (){
   export LC_ALL=C  # 所有文本通配基于locale=C测试. systemd会识别语言及utf-8调整输出样式.
-  if ! command -v systemctl >/dev/null; then echo >&2 "command systemctl not found, skip."; return 1; fi
+  # if ! command -v systemctl >/dev/null; then echo >&2 "command systemctl not found, skip."; return 1; fi
   local ret=0
   if test $# -eq 0; then
     debug "using default patt: $*"
@@ -193,7 +213,38 @@ main (){
   else
     debug "PATT are: $*"
   fi
-  status_systemd "$@"
+
+  # 优先使用 Docker 检测
+  if [ "$1" = "docker" ];then
+    shift
+    if command -v docker >/dev/null; then
+        debug "docker command found, using docker for status check."
+        status_docker "$@"
+    else
+        echo >&2 "docker command not found."
+        return 1
+    fi
+  # 显式指定 Systemd 检测
+  elif [ "$1" = "systemd" ];then
+    shift
+    if command -v systemctl >/dev/null; then
+        debug "systemctl command found, using systemd for status check."
+        status_systemd "$@"
+    else
+        echo >&2 "systemctl command not found."
+        return 1
+    fi
+  # 默认回退到 Systemd 检测 (兼容旧调用方式)
+  else
+    if command -v systemctl >/dev/null; then
+        debug "No mode specified, defaulting to systemd."
+        status_systemd "$@"
+    else
+        echo >&2 "error: neither docker nor systemctl command found, skip."
+        return 1
+    fi
+  fi
+
   return $ret
 }
 
@@ -230,4 +281,3 @@ if test $# -gt 0 && test "x$*" != "x${*/#--help/}"; then
 else
   pretty main "$@"
 fi
-

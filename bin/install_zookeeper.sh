@@ -129,9 +129,9 @@ fi
 if [[ -z $CLUSTER_IP_LIST ]]; then
     warning "CLUSTER_IP_LIST(-j)不能为空"
 fi
-if ! command -v java &>/dev/null; then
-    warning "java command not found, please install jdk first"
-fi
+#if ! command -v java &>/dev/null; then
+#    warning "java command not found, please install jdk first"
+#fi
 if [[ $EXITCODE -ne 0 ]]; then
     exit "$EXITCODE"
 fi
@@ -154,7 +154,6 @@ initLimit=10
 syncLimit=20
 dataDir=$DATA_DIR
 # 建议datalogDir放到另外一块磁盘，增加性能
-admin.enableServer=false
 #dataLogDir=/disk/xxxx
 clientPortAddress=$BIND_ADDR
 clientPort=$CLIENT_PORT

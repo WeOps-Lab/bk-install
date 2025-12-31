@@ -72,10 +72,12 @@ done
 #     yum install -y consul-template
 # fi
 
-if ! dpkg -l consul-template >/dev/null;then
-    apt install -y consul-template
-fi
+# if ! dpkg -l consul-template >/dev/null;then
+#     apt install -y consul-template
+# fi
 
+
+mkdir -p /etc/consul-template/conf.d /etc/consul-template/templates
 if ! [ -z $MODULE ];then
     if [[ $MODULE == 'nginx' ]];then
         consul kv put bkcfg/global/bk_home "$BK_HOME"
@@ -101,7 +103,7 @@ if ! [ -z $MODULE ];then
 template {
   source = "/etc/consul-template/templates/paas.conf"
   destination = "/usr/local/openresty/nginx/conf/conf.d/paas.conf"
-  command = "/bin/sh -c '/usr/local/openresty/nginx/sbin/nginx -t && echo reload openresty && systemctl reload openresty'"
+  command = "/bin/sh -c 'docker exec nginx /usr/local/openresty/nginx/sbin/nginx -t && echo reload openresty && docker exec nginx /usr/local/openresty/nginx/sbin/nginx -s reload'"
   command_timeout = "10s"
 }
 EOF
@@ -109,7 +111,7 @@ EOF
 template {
   source = "/etc/consul-template/templates/app_upstream.conf.tpl"
   destination = "/usr/local/openresty/nginx/conf/conf.d/app_upstream.conf"
-  command = "/bin/sh -c '/usr/local/openresty/nginx/sbin/nginx -t && systemctl reload openresty || true'"
+  command = "/bin/sh -c 'docker exec nginx /usr/local/openresty/nginx/sbin/nginx -t && docker exec nginx /usr/local/openresty/nginx/sbin/nginx -s reload || true'"
   command_timeout = "10s"
 }
 EOF
@@ -118,7 +120,7 @@ EOF
 template {
   source = "/etc/consul-template/templates/cmdb.conf"
   destination = "/usr/local/openresty/nginx/conf/conf.d/cmdb.conf"
-  command = "/bin/sh -c '/usr/local/openresty/nginx/sbin/nginx -t && systemctl reload openresty || true'"
+  command = "/bin/sh -c 'docker exec nginx /usr/local/openresty/nginx/sbin/nginx -t && docker exec nginx /usr/local/openresty/nginx/sbin/nginx -s reload || true'"
   command_timeout = "10s"
 }
 EOF
@@ -127,7 +129,7 @@ EOF
 template {
   source = "/etc/consul-template/templates/job.conf"
   destination = "/usr/local/openresty/nginx/conf/conf.d/job.conf"
-  command = "/bin/sh -c '/usr/local/openresty/nginx/sbin/nginx -t && systemctl reload openresty || true'"
+  command = "/bin/sh -c 'docker exec nginx /usr/local/openresty/nginx/sbin/nginx -t && docker exec nginx /usr/local/openresty/nginx/sbin/nginx -s reload || true'"
   command_timeout = "10s"
 }
 EOF
@@ -136,7 +138,7 @@ EOF
 template {
   source = "/etc/consul-template/templates/apigw.conf"
   destination = "/usr/local/openresty/nginx/conf/conf.d/apigw.conf"
-  command = "/bin/sh -c '/usr/local/openresty/nginx/sbin/nginx -t && systemctl reload openresty || true'"
+  command = "/bin/sh -c 'docker exec nginx /usr/local/openresty/nginx/sbin/nginx -t && docker exec nginx /usr/local/openresty/nginx/sbin/nginx -s reload || true'"
   command_timeout = "10s"
 }
 EOF
@@ -146,7 +148,7 @@ EOF
 template {
   source = "/etc/consul-template/templates/nodeman.conf"
   destination = "/usr/local/openresty/nginx/conf/conf.d/nodeman.conf"
-  command = "/bin/sh -c '/usr/local/openresty/nginx/sbin/nginx -t && systemctl reload openresty || true'"
+  command = "/bin/sh -c 'docker exec nginx /usr/local/openresty/nginx/sbin/nginx -t && docker exec nginx /usr/local/openresty/nginx/sbin/nginx -s reload || true'"
   command_timeout = "10s"
 }
 EOF
@@ -162,7 +164,7 @@ EOF
 template {
   source = "/etc/consul-template/templates/paasagent.conf"
   destination = "/usr/local/openresty/nginx/conf/conf.d/paasagent.conf"
-  command = "/bin/sh -c '/usr/local/openresty/nginx/sbin/nginx -t && systemctl reload openresty || true'"
+  command = "/bin/sh -c 'docker exec nginx /usr/local/openresty/nginx/sbin/nginx -t && docker exec nginx /usr/local/openresty/nginx/sbin/nginx -s reload || true'"
   command_timeout = "10s"
 }
 EOF
@@ -174,7 +176,7 @@ EOF
 template {
   source = "/etc/consul-template/templates/lesscode.conf"
   destination = "/usr/local/openresty/nginx/conf/conf.d/lesscode.conf"
-  command = "/bin/sh -c '/usr/local/openresty/nginx/sbin/nginx -t && systemctl reload openresty || true'"
+  command = "/bin/sh -c 'docker exec nginx /usr/local/openresty/nginx/sbin/nginx -t && docker exec nginx /usr/local/openresty/nginx/sbin/nginx -s reload || true'"
   command_timeout = "10s"
 }
 EOF
@@ -184,7 +186,7 @@ EOF
 template {
   source = "/etc/consul-template/templates/bkapi_check.conf"
   destination = "/usr/local/openresty/nginx/conf/conf.d/bkapi_check.conf"
-  command = "/bin/sh -c '/usr/local/openresty/nginx/sbin/nginx -t && systemctl reload openresty || true'"
+  command = "/bin/sh -c 'docker exec nginx /usr/local/openresty/nginx/sbin/nginx -t && docker exec nginx /usr/local/openresty/nginx/sbin/nginx -s reload || true'"
   command_timeout = "10s"
 }
 EOF
@@ -194,7 +196,7 @@ EOF
 template {
   source = "/etc/consul-template/templates/nginx.conf"
   destination = "/usr/local/openresty/nginx/conf/nginx.conf"
-  command = "/bin/sh -c '/usr/local/openresty/nginx/sbin/nginx -t && echo reload openresty && systemctl reload openresty'"
+  command = "/bin/sh -c 'docker exec nginx /usr/local/openresty/nginx/sbin/nginx -t && echo reload openresty && docker exec nginx /usr/local/openresty/nginx/sbin/nginx -s reload'"
   command_timeout = "10s"
 }
 EOF
@@ -202,5 +204,20 @@ EOF
 
 fi
 
-systemctl enable consul-template
-systemctl start consul-template
+# systemctl enable consul-template
+# systemctl start consul-template
+if docker ps -a | awk '{print $NF}' | grep -wq "consul-template"; then
+  log "检测到已存在的 consul-template,删除"
+  docker rm -f consul-template
+fi
+
+# 启动openresty
+docker run -d \
+    --name consul-template \
+    --restart always \
+    --net host \
+    -v /etc/consul-template:/etc/consul-template \
+    -v /usr/local/openresty/nginx:/usr/local/openresty/nginx \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    docker-bkrepo.cwoa.net/ce1b09/weops-docker/consul-template:0.25.1.1 \
+    /usr/bin/consul-template -config /etc/consul-template/conf.d

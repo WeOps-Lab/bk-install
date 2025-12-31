@@ -42,36 +42,37 @@ else
 fi
 
 declare -a THIRD_PARTY_SVC=(
-    consul
+    bk-consul
     consul-template
-    mysql@[a-z]+
-    redis@[a-z]+
-    openresty
-    rabbitmq-server
+    "mysql(-[a-z]+)?"
+    redis-[a-z]+
+    nginx
+    rabbitmq
     zookeeper
-    mongod
+    mongo
     kafka
-    elasticsearch
-    influxdb
+    es
+    influx
     beanstalkd
 )
 TMP_PTN=$(printf "%s|" "${THIRD_PARTY_SVC[@]}")
-THIRD_PARTY_SVC_PTN="^(${TMP_PTN%|})\.service$"
+THIRD_PARTY_SVC_PTN="(${TMP_PTN%|})"
 
 declare -A SERVICE=(
     ["mysql"]=mysql@default
     ['redis']=redis@default
-    ["es7"]=elasticsearch
+    ["es7"]=es
     ["nodeman"]=bk-nodeman
     ["consul"]=consul
     ["kafka"]=kafka
-    ["usermgr"]=bk-usermgr
+    ["usermgr"]=usermgr
     ["redis_sentinel"]=redis-sentinel@default
-    ["rabbitmq"]=rabbitmq-server
+    ["rabbitmq"]=rabbitmq
     ["zk"]=zookeeper
-    ["mongodb"]=mongod
-    ["influxdb"]=influxdb
-    ["nginx"]=openresty
+    ["mongodb"]=mongo
+    ["influxdb"]=influx
+    ["influx"]=influx
+    ["nginx"]=nginx
     ["beanstalk"]=beanstalkd
     ["yum"]=bk-yum
     ["fta"]=bk-fta
@@ -158,11 +159,11 @@ case $module in
             fi
         fi
         ;;
-    consul|redis|mysql|zk|mongodb|kafka|influxdb|rabbitmq)
+    consul|redis|mysql|zk|mongodb|kafka|influxdb|influx|rabbitmq|es7|usermgr)
         pcmdrc "${target}" "get_docker_service_status ${SERVICE[$module]}"
         ;;
     nginx)  
-        pcmdrc "${target}" "get_service_status ${SERVICE[$module]} ${SERVICE["consul-template"]}"
+        pcmdrc "${target}" "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh docker ${SERVICE[$module]} ${SERVICE["consul-template"]}"
         ;;
     yum)
         # 中控机安装模块
@@ -189,7 +190,7 @@ case $module in
         ;;
     bknodeman|nodeman)
         target_name=${module#bk}
-        pcmdrc "${target_name}" "docker exec bknodeman-nodeman supervisorctl -c /data/bkce/etc/supervisor-bknodeman-nodeman.conf status all;get_service_status ${SERVICE["consul-template"]} ${SERVICE["nginx"]}"
+        pcmdrc "${target_name}" "docker exec bknodeman-nodeman supervisorctl -c /data/bkce/etc/supervisor-bknodeman-nodeman.conf status all;FORCE_TTY=1 $CTRL_DIR/bin/bks.sh docker ${SERVICE["consul-template"]} ${SERVICE["nginx"]}"
         ;;
     paas_plugins|paas_plugin)
         pcmdrc "${BK_PAAS_IP0}" "get_service_status bk-paas-plugins-log-alert"
@@ -200,17 +201,17 @@ case $module in
         pcmdrc appo "get_service_status bk-filebeat@celery  bk-filebeat@component bk-filebeat@django bk-filebeat@java bk-filebeat@uwsgi"
         ;;
     bkall)
-        pcmdrc all "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh ^bk-"
+        pcmdrc all "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh systemd ^bk-"
         ;;
     tpall)
-        pcmdrc all "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh \"$THIRD_PARTY_SVC_PTN\" "
+        pcmdrc all "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh docker \"$THIRD_PARTY_SVC_PTN\" "
         ;;
     all)
         echo "Status of all blueking components: "
-        pcmdrc all "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh ^bk-"
+        pcmdrc all "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh systemd ^bk-"
         echo 
         echo "Status of all third-party components: "
-        pcmdrc all "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh \"$THIRD_PARTY_SVC_PTN\" "
+        pcmdrc all "FORCE_TTY=1 $CTRL_DIR/bin/bks.sh docker \"$THIRD_PARTY_SVC_PTN\" "
         ;;
     bcs)
         if [[ -n ${project} ]]; then

@@ -96,7 +96,7 @@ if ! command -v mysql &>/dev/null; then
     warning "mysql command is not exists."
 fi
 # check login-path is reachable 
-if ! mysql --login-path="$MYSQL_LOGIN_PATH" -e 'show processlist' >/dev/null; then
+if ! docker exec -i mysql-client mysql --login-path="$MYSQL_LOGIN_PATH" -e 'show processlist' >/dev/null; then
     warning "mysql --login-path=$MYSQL_LOGIN_PATH is not valid"
 fi
 # check SQL file exists
@@ -115,7 +115,7 @@ for sql in "${SQL[@]}"; do
     if [[ -f $MIGRATE_DIR/${sql_name} ]]; then
         log "$sql already import, skip."
     else
-        if mysql --login-path="$MYSQL_LOGIN_PATH" < "$sql"; then
+        if docker exec -i mysql-client mysql --login-path="$MYSQL_LOGIN_PATH" < "$sql"; then
             echo "$sql import done."
             tag_file "$MIGRATE_DIR" "$sql"
         else

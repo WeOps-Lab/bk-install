@@ -141,18 +141,18 @@ net_ticktime = 120
 EOF
 
 # 配置系统的logrotate
-# cat <<EOF > /etc/logrotate.d/rabbitmq-server
-# $LOG_DIR/*.log {
-#     daily
-#     missingok
-#     rotate 14
-#     size 100M
-#     compress
-#     notifempty
-#     sharedscripts
-#     endscript
-# }
-# EOF
+cat <<EOF > /etc/logrotate.d/rabbitmq-server
+$LOG_DIR/*.log {
+    daily
+    missingok
+    rotate 14
+    size 100M
+    compress
+    notifempty
+    sharedscripts
+    endscript
+}
+EOF
 
 # 如果nodename包含period，那么增加USE_LONGNAME的参数
 if [[ $NODE_NAME =~ \. ]]; then
