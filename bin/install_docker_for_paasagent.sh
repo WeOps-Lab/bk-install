@@ -14,11 +14,15 @@ set -a
 source /data/install/weops_version
 set +a
 # 卸载旧版本
-for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove $pkg; done
+#for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove $pkg; done
+for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove $pkg 2>/dev/null || true; done
 apt autoremove -y
 
 if ! dpkg -l  docker-ce=$DOCKER_VERSION; then
     apt-get install docker-ce=$DOCKER_VERSION -y
+#    apt-get install /opt/yum/containerd.io_1.7.24-1_amd64.deb -y
+#    apt-get install /opt/yum/docker-ce-cli_5%3a27.4.0-1~ubuntu.22.04~jammy_amd64.deb -y
+#    apt-get install /opt/yum/docker-ce_5%3a20.10.24~3-0~ubuntu-jammy_amd64.deb -y
 fi
 
 # TODO: 需要自定义下daemon.json(参考dockerctl的start_docker()函数)
@@ -45,10 +49,7 @@ cat <<EOF > /etc/docker/daemon.json
       "Soft": 0
     }
   },
-    "storage-driver": "overlay2",
-    "storage-opts": [
-        "overlay2.override_kernel_check=true"
-    ]
+    "storage-driver": "overlay2"
 }
 EOF
 

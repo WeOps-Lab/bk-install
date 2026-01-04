@@ -112,10 +112,10 @@ check_src_dir () {
         echo "no docker image directory under $BK_PKG_SRC_PATH. please extract it first."
         return 1
     fi
-    if ! [[ -d /opt/yum ]]; then 
-        echo "no yum directory under /opt,  please extract it first."
-        return 1
-    fi
+#    if ! [[ -d /opt/yum ]]; then 
+#        echo "no yum directory under /opt,  please extract it first."
+#        return 1
+#    fi
     if ! [[ -r $BK_PKG_SRC_PATH/java8.tgz ]]; then
         echo "no java8.tgz under $BK_PKG_SRC_PATH,  please download a jdk8 and rename it to java8.tgz."
         return 1

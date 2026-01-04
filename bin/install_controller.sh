@@ -21,7 +21,7 @@ done
 #        rsync jq expect uuid bash-completion lsof openssl-devel readline-devel libcurl-devel libxml2-devel glibc-devel \
 #        zlib-devel iproute sysvinit-tools procps-ng bind-utils)
 COMMON_LIST=(pssh parallel zip unzip rsync gawk curl lsof tar sed iproute2 uuid psmisc wget at \
-	  rsync jq expect uuid bash-completion lsof openssl libssl-dev libreadline-dev libcurl4-openssl-dev libcurl4 libxml2-dev \
+	  rsync jq expect uuid bash-completion lsof openssl libssl-dev  libreadline-dev libcurl4-openssl-dev libcurl4 libxml2-dev \
           zlib1g zlib1g-dev dnsutils dpkg-dev)
 EXTAR_LIST=(mysql-client)
 

@@ -650,6 +650,7 @@ install_paas () {
 }
 
 _install_paas_project () {
+    source /data/install/weops_version
     local module=paas
     local project=${1:-all}
     local target_name=$(map_module_name $module)
@@ -660,8 +661,8 @@ _install_paas_project () {
     emphasize "migrate ${module} sql"
     migrate_sql $module
     # paas服务器同步并安装python
-    emphasize "sync and install python on host: ${BK_PAAS_IP_COMMA}"
-    install_python $module
+    # emphasize "sync and install python on host: ${BK_PAAS_IP_COMMA}"
+    # install_python $module
 
     # 要加判断传入值是否正确
     for project in ${project[@]}; do
@@ -671,7 +672,7 @@ _install_paas_project () {
         for ip in "${BK_PAAS_IP[@]}"; do 
             emphasize "install ${module}(${project}) on host: ${ip}"
             cost_time_attention
-            "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_paas.sh -e '${CTRL_DIR}/bin/04-final/paas.env' -m '$project' -s '${BK_PKG_SRC_PATH}' -p '${INSTALL_PATH}' -b \$LAN_IP --python-path '${python_path}'"
+            "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_paas.sh -e '${CTRL_DIR}/bin/04-final/paas.env' -m '$project' -s '${BK_PKG_SRC_PATH}' -p '${BK_HOME}'" 
             emphasize "register consul ${project_consul} on host: ${ip}"
             reg_consul_svc "${project_consul}" "${project_port}" "$ip"
         done
@@ -1020,11 +1021,11 @@ install_usermgr () {
     source <(/opt/py36/bin/python ${SELF_DIR}/qq.py -p ${BK_PKG_SRC_PATH}/${target_name}/projects.yaml -P ${SELF_DIR}/bin/default/port.yaml)
     local projects=${_projects[$module]}
     for project in ${projects[@]}; do
-        local python_path=$(get_interpreter_path ${module} "${project}")
+        #local python_path=$(get_interpreter_path ${module} "${project}")
         for ip in "${BK_USERMGR_IP[@]}"; do
             emphasize "install ${module} ${project} on host: ${BK_USERMGR_IP_COMMA} "
             "${SELF_DIR}"/pcmd.sh -H "${ip}" \
-                    "${CTRL_DIR}/bin/install_usermgr.sh -e ${CTRL_DIR}/bin/04-final/usermgr.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH} --python-path ${python_path}"
+                    "${CTRL_DIR}/bin/install_usermgr.sh -e ${CTRL_DIR}/bin/04-final/usermgr.env -s ${BK_PKG_SRC_PATH} -p ${INSTALL_PATH}"
             reg_consul_svc "${_project_consul[${target_name},${project}]}" "${_project_port[${target_name},${project}]}" "${ip}"
         done
     done

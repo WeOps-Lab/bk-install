@@ -1,0 +1,377 @@
+#!/usr/bin/env bash
+# 用途：使用 Docker 容器部署蓝鲸的 PaaS 平台后台
+ 
+# 安全模式
+set -euo pipefail 
+
+# 通用脚本框架变量
+PROGRAM=$(basename "$0")
+VERSION=1.0
+EXITCODE=0
+
+# 全局默认变量
+SELF_DIR=$(dirname "$(readlink -f "$0")")
+
+# 默认的绑定端口
+declare -A PORTS=(
+    ["paas"]=8001
+    ["appengine"]=8000
+    ["esb"]=8002
+    ["login"]=8003
+    ["console"]=8004
+    ["apigw"]=8005
+)
+declare -a MODULES=(${!PORTS[@]})
+
+# 模块安装后所在的上一级目录(宿主机路径)
+PREFIX=/data/bkce
+
+# 模块目录的上一级目录
+MODULE_SRC_DIR=/data/src
+
+# Docker 镜像
+DOCKER_IMAGE="repo.service.consul:8181/paas:latest"
+
+# Docker 用户 ID
+DOCKER_UID=10000
+
+MODULE=open_paas
+
+# 必要的系统依赖(用于宿主机准备)
+RPM_DEP=(nfs-common)
+
+ENV_FILE=
+BIND_ADDR=127.0.0.1
+
+usage () {
+    cat <<EOF
+用法: 
+    $PROGRAM [ -h --help -?  查看帮助 ]
+            [ -b, --bind        [可选] "监听的网卡地址，默认为127.0.0.1" ]
+            [ -m, --module      [可选] "安装的子模块(${MODULES[*]}), 默认都会安装" ]
+            [ -e, --env-file    [可选] "使用该配置文件来渲染" ]
+            [ -i, --image       [可选] "Docker镜像地址，默认为 $DOCKER_IMAGE" ]
+
+            [ -s, --srcdir      [必填] "从该目录拷贝open_paas/module目录到--prefix指定的目录" ]
+            [ -p, --prefix      [可选] "安装的目标路径，默认为/data/bkce" ]
+            [ -l, --log-dir     [可选] "日志目录,默认为\$PREFIX/logs/open_paas" ]
+
+            [ -v, --version     [可选] 查看脚本版本号 ]
+EOF
+}
+
+usage_and_exit () {
+    usage
+    exit "$1"
+}
+
+log () {
+    echo "$@"
+}
+
+error () {
+    echo "$@" 1>&2
+    usage_and_exit 1
+}
+
+fail () {
+    echo "$@" 1>&2
+    exit 1
+}
+
+warning () {
+    echo "$@" 1>&2
+    EXITCODE=$((EXITCODE + 1))
+}
+
+version () {
+    echo "$PROGRAM version $VERSION"
+}
+
+# 解析命令行参数，长短混合模式
+(( $# == 0 )) && usage_and_exit 1
+while (( $# > 0 )); do 
+    case "$1" in
+        -b | --bind )
+            shift
+            BIND_ADDR=$1
+            ;;
+        -m | --module )
+            shift
+            PAAS_MODULE=$1
+            ;;
+        -e | --env-file)
+            shift
+            ENV_FILE="$1"
+            ;;
+        -i | --image )
+            shift
+            DOCKER_IMAGE=$1
+            ;;
+        -s | --srcdir )
+            shift
+            MODULE_SRC_DIR=$1
+            ;;
+        -p | --prefix )
+            shift
+            PREFIX=$1
+            ;;
+        -l | --log-dir )
+            shift
+            LOG_DIR=$1
+            ;;
+        --help | -h | '-?' )
+            usage_and_exit 0
+            ;;
+        --version | -v | -V )
+            version 
+            exit 0
+            ;;
+        -*)
+            error "不可识别的参数: $1"
+            ;;
+        *) 
+            break
+            ;;
+    esac
+    shift 
+done 
+
+LOG_DIR=${LOG_DIR:-$PREFIX/logs/open_paas}
+
+# 参数合法性有效性校验
+if ! [[ -d "$MODULE_SRC_DIR"/open_paas ]]; then
+    warning "$MODULE_SRC_DIR/open_paas 不存在"
+fi
+if ! [[ -r "$ENV_FILE" ]]; then
+    warning "ENV_FILE: ($ENV_FILE) 不存在或者未指定"
+fi
+if (( EXITCODE > 0 )); then
+    usage_and_exit "$EXITCODE"
+fi
+
+# 检查 Docker 是否安装
+if ! command -v docker &>/dev/null; then
+    fail "Docker 未安装，请先安装 Docker"
+fi
+
+# 安装用户和配置目录
+id -u blueking &>/dev/null || \
+    { echo "<blueking> user has not been created, please check ./bin/update_bk_env.sh"; exit 1; } 
+
+# 创建必要的目录结构（宿主机上）
+install -o blueking -g blueking -d "${LOG_DIR}"
+install -o blueking -g blueking -m 755 -d /etc/blueking/env 
+install -o blueking -g blueking -m 755 -d "$PREFIX/open_paas"
+install -o blueking -g blueking -m 755 -d "$PREFIX/public/open_paas"
+install -o blueking -g blueking -m 755 -d "$PREFIX/etc"
+# 创建 /data/bkce/logs 目录（Django default.py 的 LOGGING_DIR 回退路径）
+install -o blueking -g blueking -m 755 -d "$PREFIX/logs"
+
+# 说明：Docker 容器方案不需要在宿主机创建 /var/run/open_paas
+# 原因：
+#   1. 容器每次启动都有干净的 /var/run 环境
+#   2. uwsgi 会在容器内自动创建需要的 socket/pid 文件
+#   3. 使用 TCP socket (http-socket) 比 Unix socket 更适合容器环境
+# 如果必须使用 Unix socket 并需要宿主机访问，可以：
+#   - 方案A: 挂载 /var/run/open_paas (需要创建目录和 tmpfiles.d)
+#   - 方案B: 改用 $PREFIX/run/open_paas (推荐，持久化存储)
+
+# 安装必要的系统依赖
+if ! dpkg -l "${RPM_DEP[@]}" >/dev/null 2>&1; then
+    log "安装系统依赖: ${RPM_DEP[*]}"
+    apt -y install "${RPM_DEP[@]}"
+fi
+
+# 拷贝support-files (包含 Python 包等)
+log "拷贝 support-files..."
+rsync -a --delete "${MODULE_SRC_DIR}"/open_paas/support-files "$PREFIX/open_paas/"
+
+# 拷贝模块目录到$PREFIX
+log "拷贝模块代码: ${PAAS_MODULE}..."
+rsync -a --delete --exclude=media "${MODULE_SRC_DIR}"/open_paas/"${PAAS_MODULE}"/ "$PREFIX/open_paas/${PAAS_MODULE}/"
+
+# paas 模块的特殊处理：保留 media 目录（用户上传的 SaaS 包）
+if [[ ${PAAS_MODULE} = paas ]]; then
+    log "同步 paas 模块的 media 目录..."
+    rsync -a "${MODULE_SRC_DIR}/open_paas/paas/media/" "$PREFIX/open_paas/paas/media/" 2>/dev/null || true
+fi
+
+case $PAAS_MODULE in 
+    login|console|esb|paas|apigw|appengine) 
+        log "准备部署 ${PAAS_MODULE} 模块..."
+
+        # Docker 版本说明：
+        # 镜像已包含虚拟环境（/cache/.bk/env/），只需挂载代码和配置
+
+        # 渲染配置文件
+        log "渲染配置文件..."
+        "$SELF_DIR"/render_tpl -u -m "$MODULE" -p "$PREFIX" \
+            -E LAN_IP="$BIND_ADDR" -e "$ENV_FILE" \
+            "$MODULE_SRC_DIR"/$MODULE/support-files/templates/*"${PAAS_MODULE}"*
+
+        # 使用临时容器进行数据库迁移
+        if [[ -f $PREFIX/$MODULE/$PAAS_MODULE/on_migrate ]]; then
+            log "执行数据库迁移 (migration)..."
+            
+            # 预创建容器内 /logs/open_paas 目录，避免 settings 导入时报错
+            docker run --rm \
+                "$DOCKER_IMAGE" \
+                /bin/bash -c "mkdir -p /logs/open_paas && chown $DOCKER_UID:$DOCKER_UID /logs/open_paas"
+
+            # 以用户 10000 执行迁移
+            docker run --rm \
+                -v "$PREFIX/open_paas:$PREFIX/open_paas" \
+                -v "$PREFIX/logs:$PREFIX/logs" \
+                -v "$PREFIX/etc:$PREFIX/etc:ro" \
+                -v "$PREFIX/public/open_paas:$PREFIX/public/open_paas" \
+                -e BK_ENV=production \
+                -e PAAS_LOGGING_DIR="$LOG_DIR" \
+                -e PATH="/cache/.bk/env/bin:$PATH" \
+                -e PYTHONPATH="$PREFIX/open_paas/${PAAS_MODULE}" \
+                -e HOME=/tmp \
+                -u "$DOCKER_UID" \
+                --net=host \
+                "$DOCKER_IMAGE" \
+                /bin/bash -c "
+                    mkdir -p /logs/open_paas && chown $DOCKER_UID:$DOCKER_UID /logs/open_paas
+                    cd $PREFIX/open_paas/${PAAS_MODULE}
+                    
+                    # ESB 特殊处理：on_migrate 中缺少 migrate 命令，需要先运行
+                    if [[ '${PAAS_MODULE}' == 'esb' ]]; then
+                        echo '运行 Django migrate...'
+                        python manage.py migrate --noinput || { echo 'Migrate failed'; exit 1; }
+                    fi
+                    
+                    # 处理 on_migrate：替换虚拟环境命令为容器环境命令
+                    sed -e '/^source.*\.bkrc/d' \\
+                        -e '/^source.*\/functions/d' \\
+                        -e 's/^workon .*/# workon replaced - using container python/' \\
+                        -e 's/|| fail .*/|| { echo Migration failed; exit 1; }/' \\
+                        -e '/^#!.*bash/d' \\
+                        on_migrate | /bin/bash -e
+                " 2>&1 | tee /tmp/migration_${PAAS_MODULE}.log
+            
+            MIGRATION_EXIT_CODE=${PIPESTATUS[0]}
+            if [[ $MIGRATION_EXIT_CODE -ne 0 ]]; then
+                warning "警告: migration 执行失败 (退出码: $MIGRATION_EXIT_CODE)"
+                log "详细日志: /tmp/migration_${PAAS_MODULE}.log"
+                log "继续部署服务..."
+            else
+                log "✓ migration 执行成功"
+            fi
+        fi
+
+        # 停止并删除已存在的容器
+        CONTAINER_NAME="bk-paas-${PAAS_MODULE}"
+        if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+            log "停止并删除已存在的容器: ${CONTAINER_NAME}"
+            docker stop "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+            docker rm "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+        fi
+
+        # 启动 Docker 容器
+        log "启动 Docker 容器: ${CONTAINER_NAME}"
+        
+        # 预创建容器内 /logs/open_paas 目录，避免 settings 导入时报错
+        docker run --rm \
+            "$DOCKER_IMAGE" \
+            /bin/bash -c "mkdir -p /logs/open_paas && chown $DOCKER_UID:$DOCKER_UID /logs/open_paas"
+
+        docker run -itd \
+            -v "$PREFIX/open_paas:$PREFIX/open_paas" \
+            -v "$PREFIX/logs:$PREFIX/logs" \
+            -v "$PREFIX/etc:$PREFIX/etc:ro" \
+            -v "$PREFIX/public/open_paas:$PREFIX/public/open_paas" \
+            -e PATH="/cache/.bk/env/bin:$PATH" \
+            -e PAAS_LOGGING_DIR="$LOG_DIR" \
+            -e HOME=/tmp \
+            --name="${CONTAINER_NAME}" \
+            --net=host \
+            -u "$DOCKER_UID" \
+            --restart=on-failure \
+            "$DOCKER_IMAGE" \
+            /bin/bash -c "mkdir -p /logs/open_paas && chown $DOCKER_UID:$DOCKER_UID /logs/open_paas && exec /cache/.bk/env/bin/uwsgi --ini $PREFIX/etc/uwsgi-open_paas-${PAAS_MODULE}.ini"
+
+        if [[ $? -ne 0 ]]; then
+            fail "启动容器 ${CONTAINER_NAME} 失败"
+        fi
+
+        # 生成 systemd service 文件用于管理 Docker 容器
+        log "生成 systemd service 配置..."
+        cat > /usr/lib/systemd/system/bk-paas-"${PAAS_MODULE}".service <<EOF
+[Unit]
+Description=BlueKing PaaS($PAAS_MODULE) Docker Container
+After=docker.service network-online.target
+Requires=docker.service
+PartOf=bk-paas.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+Restart=on-failure
+RestartSec=3s
+TimeoutStartSec=0
+RemainAfterExit=yes
+
+ExecStartPre=-/usr/bin/docker stop ${CONTAINER_NAME}
+ExecStartPre=-/usr/bin/docker rm ${CONTAINER_NAME}
+ExecStartPre=/usr/bin/docker run --rm $DOCKER_IMAGE /bin/bash -c 'mkdir -p /logs/open_paas && chown $DOCKER_UID:$DOCKER_UID /logs/open_paas'
+ExecStart=/usr/bin/docker run -d \\
+    -v $PREFIX/open_paas:$PREFIX/open_paas \\
+    -v $PREFIX/logs:$PREFIX/logs \
+    -v $PREFIX/etc:$PREFIX/etc:ro \\
+    -v $PREFIX/public/open_paas:$PREFIX/public/open_paas \\
+    -e PATH=/cache/.bk/env/bin:\$\$PATH \\
+    -e PAAS_LOGGING_DIR=$LOG_DIR \\
+    -e HOME=/tmp \\
+    --name=${CONTAINER_NAME} \\
+    --net=host \\
+    -u $DOCKER_UID \\
+    --restart=on-failure \\
+    $DOCKER_IMAGE \\
+    /bin/bash -c 'mkdir -p /logs/open_paas && chown '"$DOCKER_UID:$DOCKER_UID"' /logs/open_paas && exec /cache/.bk/env/bin/uwsgi --ini '"$PREFIX/etc/uwsgi-open_paas-${PAAS_MODULE}.ini"''
+
+ExecStop=/usr/bin/docker stop ${CONTAINER_NAME}
+ExecStopPost=/usr/bin/docker rm ${CONTAINER_NAME}
+
+[Install]
+WantedBy=bk-paas.target
+EOF
+        ;;
+    *)
+        error "unknown module: $PAAS_MODULE"
+        ;;
+esac
+
+# 设置目录权限
+log "设置目录权限..."
+chown -R blueking.blueking "$PREFIX/open_paas" "$LOG_DIR" "$PREFIX/etc" "$PREFIX/public/open_paas"
+
+# 创建 bk-paas.target 文件（用于统一管理所有 PaaS 模块）
+cat > /usr/lib/systemd/system/bk-paas.target <<EOF
+[Unit]
+Description=BlueKing PaaS target allowing to start/stop all PaaS module instances at once
+
+[Install]
+WantedBy=multi-user.target blueking.target
+EOF
+
+# 重载 systemd 配置
+log "重载 systemd 配置..."
+systemctl daemon-reload
+systemctl enable bk-paas.target
+
+if ! systemctl is-enabled "bk-paas-${PAAS_MODULE}" &>/dev/null; then
+    systemctl enable "bk-paas-${PAAS_MODULE}"
+fi
+
+log "======================================"
+log "PaaS 模块 ${PAAS_MODULE} 部署完成！"
+log "======================================"
+log "容器名称: bk-paas-${PAAS_MODULE}"
+log "容器状态: docker ps -f name=bk-paas-${PAAS_MODULE}"
+log "容器日志: docker logs -f bk-paas-${PAAS_MODULE}"
+log "服务管理: systemctl start/stop/status bk-paas-${PAAS_MODULE}"
+log "======================================"

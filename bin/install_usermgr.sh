@@ -1,47 +1,38 @@
 #!/usr/bin/env bash
-# 用途： 安装蓝鲸的用户管理后台(usermgr/api)
- 
-# 安全模式
-set -euo pipefail 
+# 蓝鲸用户管理(usermgr)容器化安装脚本
 
-# 重置PATH
-PATH=/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
-export PATH 
+set -euo pipefail
 
-# 通用脚本框架变量
 PROGRAM=$(basename "$0")
 VERSION=1.0
-EXITCODE=0
 
-# 全局默认变量
 SELF_DIR=$(dirname "$(readlink -f "$0")")
-USERMGR_MODULE=api
+# 尝试加载版本文件，但允许被 -i 参数覆盖
+if [[ -f /data/install/weops_version ]]; then
+    source /data/install/weops_version
+fi
 
-# 模块安装后所在的上一级目录
-PREFIX=/data/bkee
-
-# 模块目录的上一级目录
-MODULE_SRC_DIR=/data/src
-
-# PYTHON目录
-PYTHON_PATH=/opt/py36/bin/python3.6
-
-# 默认安装所有子模块
-MODULE=usermgr
-RPM_DEP=(gcc)
-ENV_FILE=
+# --- 变量定义 ---
+PREFIX="/data/bkee"
+MODULE_SRC_DIR="/data/src"
+ENV_FILE=""
+BIND_ADDR="127.0.0.1"
+MODULE="usermgr"
+LOG_DIR="${PREFIX}/logs/${MODULE}"
+USERMGR_DIR="${PREFIX}/${MODULE}"
+IMAGE="${USERMGR_IMAGE:-}" # 默认从 weops_version 获取
+DOCKER_NETWORK_MODE="host"
+# ----------------
 
 usage () {
     cat <<EOF
 用法: 
     $PROGRAM [ -h --help -?  查看帮助 ]
-            [ --python-path     [可选] "指定创建virtualenv时的python二进制路径" ]
-            [ -e, --env-file    [可选] "使用该配置文件来渲染" ]
-
-            [ -s, --srcdir      [必选] "从该目录拷贝usermgr目录到--prefix指定的目录" ]
-            [ -p, --prefix      [可选] "安装的目标路径，默认为/data/bkee" ]
-            [ --log-dir         [可选] "日志目录,默认为$PREFIX/logs/usermgr" ]
-
+            [ -s, --srcdir      [必填] "源代码目录" ]
+            [ -p, --prefix      [必填] "安装目标路径" ]
+            [ -i, --image       [可选] "Docker镜像" ]
+            [ -e, --env-file    [可选] "环境变量文件" ]
+            [ --python-path     [可选] "兼容参数，忽略" ]
             [ -v, --version     [可选] 查看脚本版本号 ]
 EOF
 }
@@ -51,157 +42,126 @@ usage_and_exit () {
     exit "$1"
 }
 
-log () {
-    echo "$@"
-}
-
-error () {
-    echo "$@" 1>&2
-    usage_and_exit 1
-}
-
-warning () {
-    echo "$@" 1>&2
-    EXITCODE=$((EXITCODE + 1))
-}
-
-version () {
-    echo "$PROGRAM version $VERSION"
-}
-
-# 解析命令行参数，长短混合模式
-(( $# == 0 )) && usage_and_exit 1
+# 参数解析
 while (( $# > 0 )); do 
     case "$1" in
-        --python-path )
-            shift
-            PYTHON_PATH=$1
-            ;;
-        -e | --env-file)
-            shift
-            ENV_FILE="$1"
-            ;;
-        -s | --srcdir )
-            shift
-            MODULE_SRC_DIR=$1
-            ;;
-        -p | --prefix )
-            shift
-            PREFIX=$1
-            ;;
-        --help | -h | '-?' )
-            usage_and_exit 0
-            ;;
-        --version | -v | -V )
-            version 
-            exit 0
-            ;;
-        -*)
-            error "不可识别的参数: $1"
-            ;;
-        *) 
-            break
-            ;;
+        -s | --srcdir ) shift; MODULE_SRC_DIR=$1 ;;
+        -p | --prefix ) shift; PREFIX=$1 ;;
+        -i | --image ) shift; IMAGE=$1 ;;
+        -e | --env-file ) shift; ENV_FILE=$1 ;;
+        --python-path ) shift ;; # 忽略
+        --help | -h | '-?' ) usage_and_exit 0 ;;
+        --version | -v | -V ) echo "$VERSION"; exit 0 ;;
+        -* ) echo "不可识别的参数: $1" 1>&2; usage_and_exit 1 ;;
+        *) break ;;
     esac
     shift 
 done 
 
-LOG_DIR=${LOG_DIR:-$PREFIX/logs/usermgr}
+LOG_DIR="${PREFIX}/logs/${MODULE}"
+USERMGR_DIR="${PREFIX}/${MODULE}"
 
-# 参数合法性有效性校验，这些可以使用通用函数校验。
-if ! [[ -d "$MODULE_SRC_DIR"/usermgr ]]; then
-    warning "$MODULE_SRC_DIR/usermgr 不存在"
+if [[ -z "$MODULE_SRC_DIR" ]]; then echo "必须指定源代码目录 -s" 1>&2; usage_and_exit 1; fi
+if [[ -z "$PREFIX" ]]; then echo "必须指定安装目标路径 -p" 1>&2; usage_and_exit 1; fi
+if [[ -z "$IMAGE" ]]; then echo "必须指定镜像 -i 或在 weops_version 中定义" 1>&2; usage_and_exit 1; fi
+
+# 1. 清理旧的部署 (Systemd)
+if systemctl is-active --quiet bk-usermgr; then
+    echo "Stopping bk-usermgr systemd service..."
+    systemctl stop bk-usermgr
 fi
-if ! [[ $($PYTHON_PATH --version 2>&1) = *Python* ]]; then
-    warning "$PYTHON_PATH 不是一个合法的python二进制"
+if systemctl is-enabled --quiet bk-usermgr; then
+    echo "Disabling bk-usermgr systemd service..."
+    systemctl disable bk-usermgr
 fi
-if ! [[ -r "$ENV_FILE" ]]; then
-    warning "ENV_FILE: ($ENV_FILE) 不存在或者未指定"
+if [[ -f /usr/lib/systemd/system/bk-usermgr.service ]]; then
+    echo "Removing bk-usermgr.service..."
+    rm -f /usr/lib/systemd/system/bk-usermgr.service
+    systemctl daemon-reload
 fi
-if (( EXITCODE > 0 )); then
-    usage_and_exit "$EXITCODE"
+# 清理 supervisord 配置 (防止冲突)
+if [[ -f ${PREFIX}/etc/supervisor-usermgr-api.conf ]]; then
+    # 注意：我们稍后会重新渲染它，但如果它被 supervisord 管理，我们需要先停止它
+    # 如果 supervisord 正在运行且管理着 usermgr，我们需要 update
+    if pgrep -x supervisord >/dev/null; then
+       # 尝试停止该进程组
+       /opt/py36/bin/supervisorctl stop usermgr-api:* || true
+       # 移除配置? 不，我们稍后会覆盖它。
+       # 但是如果 supervisord 还在运行，它可能会尝试重启。
+       # 最好是从 supervisord 中移除。
+       rm -f ${PREFIX}/etc/supervisor-usermgr-api.conf
+       /opt/py36/bin/supervisorctl update || true
+    fi
 fi
 
+# 创建目录
+install -o 10000 -g 10000 -d "${LOG_DIR}"
+install -o 10000 -g 10000 -m 755 -d "${USERMGR_DIR}"
+install -o 10000 -g 10000 -m 755 -d "${PREFIX}/public/usermgr"
+install -o 10000 -g 10000 -m 755 -d /var/run/usermgr
 
-id -u blueking &>/dev/null || \
-    { echo "<blueking> user has not been created, please check ./bin/update_bk_env.sh"; exit 1; } 
+# 拷贝代码
+rsync -a --delete "${MODULE_SRC_DIR}/usermgr/" "${USERMGR_DIR}/"
+chown -R 10000:10000 "${USERMGR_DIR}"
+chown -R 10000:10000 "${LOG_DIR}"
 
-install -o blueking -g blueking -d "${LOG_DIR}"
-install -o blueking -g blueking -m 755 -d /etc/blueking/env 
-install -o blueking -g blueking -m 755 -d "$PREFIX/$MODULE"
-install -o blueking -g blueking -m 755 -d "$PREFIX/public/$MODULE"
-install -o blueking -g blueking -m 755 -d /var/run/usermgr
+# 渲染配置
+# 如果 ENV_FILE 为空，render_tpl 会尝试使用默认配置
+RENDER_ARGS=(-u -m "usermgr" -p "$PREFIX")
+if [[ -n "$ENV_FILE" ]]; then
+    RENDER_ARGS+=(-e "$ENV_FILE")
+fi
 
-# 配置/var/run临时目录重启后继续生效
-cat > /etc/tmpfiles.d/usermgr.conf <<EOF
-D /var/run/usermgr 0755 blueking blueking
-EOF
+"$SELF_DIR"/render_tpl "${RENDER_ARGS[@]}" \
+        "$MODULE_SRC_DIR"/usermgr/support-files/templates/*api*
 
-# 拷贝模块目录到$PREFIX
-rsync -a --delete "${MODULE_SRC_DIR}/$MODULE/" "$PREFIX/$MODULE/"
+# 修正 supervisor 配置中的路径，适配容器环境
+# 将宿主机的虚拟环境路径替换为容器内的路径
+sed -i 's|/data/bkce/.envs/usermgr-api/bin/|/cache/.bk/env/bin/|g' "${PREFIX}/etc/supervisor-usermgr-api.conf"
 
-case $USERMGR_MODULE in 
-    api) 
-        # 安装rpm依赖包，如果不存在
-        if ! dpkg -l "${RPM_DEP[@]}" >/dev/null; then
-            apt -y install "${RPM_DEP[@]}"
-        fi
-       # 安装虚拟环境和依赖包
-        "${SELF_DIR}"/install_py_venv_pkgs.sh -e -p "$PYTHON_PATH" \
-            -n "${MODULE}-${USERMGR_MODULE}" \
-            -w "${PREFIX}/.envs" -a "$PREFIX/$MODULE/${USERMGR_MODULE}" \
-            -s "$PREFIX/$MODULE/support-files/pkgs" \
-            -r "$PREFIX/$MODULE/${USERMGR_MODULE}/requirements.txt"
-        if [[ "$PYTHON_PATH" = *_e* ]]; then
-            # 拷贝加密解释器 //todo
-            cp -a "${PYTHON_PATH}"_e $PREFIX/.envs/${MODULE}-${USERMGR_MODULE}/bin/python
-        fi
-        # 渲染配置
-        "$SELF_DIR"/render_tpl -u -m "$MODULE" -p "$PREFIX" \
-                -e "$ENV_FILE" \
-                "$MODULE_SRC_DIR"/$MODULE/support-files/templates/*api*
-        
-        (
-            set +u
-            export WORKON_HOME=$PREFIX/.envs
-            VIRTUALENVWRAPPER_PYTHON="$PYTHON_PATH"
-            source "${PYTHON_PATH%/*}/virtualenvwrapper.sh"
-            workon "${MODULE}-${USERMGR_MODULE}" && \
-            DJANGO_SETTINGS_MODULE="bkuser_core.config.overlays.prod" python manage.py migrate
-        )
+# 数据库迁移
+echo "正在执行数据库迁移..."
+docker run --rm \
+    --user 10000 \
+    -v "${USERMGR_DIR}:${USERMGR_DIR}" \
+    -v "${PREFIX}/etc:${PREFIX}/etc" \
+    -v "${LOG_DIR}:${LOG_DIR}" \
+    --net="${DOCKER_NETWORK_MODE}" \
+    -e BK_ENV=production \
+    -e DJANGO_SETTINGS_MODULE="bkuser_core.config.overlays.prod" \
+    "${IMAGE}" \
+    bash -c "cd ${USERMGR_DIR}/api && python manage.py migrate"
 
-        chown blueking.blueking -R "$PREFIX/$MODULE" "$LOG_DIR"
-    
-        # 生成systemd的配置
-        cat > /usr/lib/systemd/system/bk-usermgr.service <<EOF
-[Unit]
-Description=Blueking Usermgr backend Supervisor daemon
-After=network-online.target
-PartOf=blueking.target
+# 启动容器
+cname="usermgr"
+if docker ps -a --format '{{.Names}}' | grep -q "^${cname}$"; then
+    docker rm -f "${cname}"
+fi
 
-[Service]
-User=blueking
-Group=blueking
-Type=forking
-ExecStart=/opt/py36/bin/supervisord -c $PREFIX/etc/supervisor-usermgr-api.conf
-ExecStop=/opt/py36/bin/supervisorctl -c $PREFIX/etc/supervisor-usermgr-api.conf shutdown
-ExecReload=/opt/py36/bin/supervisorctl -c $PREFIX/etc/supervisor-usermgr-api.conf reload
-Restart=on-failure
-RestartSec=3s
+echo "启动容器 ${cname}..."
+# 注意：这里假设 supervisor 配置文件路径为 $PREFIX/etc/supervisor-usermgr-api.conf
+# 并且容器内可以直接使用 supervisord
+docker run -itd \
+    --user 10000 \
+    -v "${USERMGR_DIR}:${USERMGR_DIR}" \
+    -v "${PREFIX}/etc:${PREFIX}/etc" \
+    -v "${LOG_DIR}:${LOG_DIR}" \
+    -v /var/run/usermgr:/var/run/usermgr \
+    --net="${DOCKER_NETWORK_MODE}" \
+    --name="${cname}" \
+    --restart always \
+    -e BK_ENV=production \
+    -e DJANGO_SETTINGS_MODULE="bkuser_core.config.overlays.prod" \
+    "${IMAGE}" \
+    supervisord -n -c "${PREFIX}/etc/supervisor-usermgr-api.conf"
 
-[Install]
-WantedBy=multi-user.target blueking.target
-EOF
-        systemctl daemon-reload
-        ;;
-esac
-
-if ! systemctl is-enabled "bk-usermgr" &>/dev/null; then
-    systemctl enable --now bk-usermgr
+# 检查状态
+sleep 3
+if docker ps | grep -q "${cname}"; then
+    echo "容器 ${cname} 启动成功"
 else
-    systemctl start bk-usermgr
+    echo "容器 ${cname} 启动失败"
+    docker logs "${cname}"
+    exit 1
 fi
 
-# 校验是否成功
-sleep 1
-systemctl status bk-usermgr

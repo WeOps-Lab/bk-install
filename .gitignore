@@ -7,3 +7,5 @@ install.config
 .controller_ip
 .path
 .rcmdrc
+.DS_Store
+ha-templates/.DS_Store

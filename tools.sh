@@ -201,6 +201,7 @@ pcmdrc () {
     fi
 }
 
+
 add_saas_environment () {
     local s
 
@@ -393,20 +394,50 @@ get_common_bk_service_status (){
     "${CTRL_DIR}"/bin/bks.sh "${service[@]}"
 } 
 
-get_spic_bk_service_status (){
+#get_spic_bk_service_status (){
+#    local module=$1
+#    shift
+#    local service=()
+#    export FORCE_TTY=1
+#    for p in "$@"; do  
+#        if [[ "${module}"  == 'paas' && $#  != 1 ]]; then
+#            service+=( "bk-${p#${module}_}.service" )
+#        else
+#            service+=( "bk-${p#${module}_}.service" )
+#        fi
+#    done
+#    "${CTRL_DIR}"/bin/bks.sh "${service[@]}"
+#} 
+
+get_common_bk_service_status (){
     local module=$1
     shift
     local service=()
     export FORCE_TTY=1
+    
+    # 特殊处理 paas 模块，检查容器状态
+    if [[ "${module}" == "paas" ]]; then
+        local service=()
+        for p in "$@"; do
+            # 兼容传入参数可能带有的前缀或后缀，这里假设容器名为 bk-paas-{组件名}
+            # 例如传入 paas, appengine, esb 等
+            local component=${p#${module}_} # 去掉可能的 module_ 前缀
+            local cname="bk-paas-${component}"
+            service+=( "$cname" )
+        done
+        # 调用 bks.sh docker 模式，利用其内置的高亮和格式化功能
+        "${CTRL_DIR}"/bin/bks.sh docker "${service[@]}"
+        return 0
+    fi
+
+    # 原有逻辑保持不变，用于其他非容器化模块
     for p in "$@"; do  
-        if [[ "${module}"  == 'paas' && $#  != 1 ]]; then
-            service+=( "bk-${p#${module}_}.service" )
-        else
-            service+=( "bk-${p#${module}_}.service" )
-        fi
+        p=${p/-/_}   # 兼容返回分隔符
+        service+=( "bk-${module}-${p#${module}_}.service" )
     done
-    "${CTRL_DIR}"/bin/bks.sh "${service[@]}"
-} 
+    "${CTRL_DIR}"/bin/bks.sh systemd "${service[@]}"
+}
+
 
 get_service_status () {
     local service=()
@@ -414,15 +445,16 @@ get_service_status () {
     for p in "$@"; do  
         service+=( "${p}.service" )
     done
-    "${CTRL_DIR}"/bin/bks.sh "${service[@]}"
+    "${CTRL_DIR}"/bin/bks.sh systemd "${service[@]}"
 }
 
 get_docker_service_status () {
     local service=()
     export FORCE_TTY=1
     for p in "$@"; do  
-        docker ps -q -f name="${p}"
+        service+=( "${p}" )
     done
+    "${CTRL_DIR}"/bin/bks.sh docker "${service[@]}"
 }
 
 _sign_host_as_module () {
@@ -480,4 +512,5 @@ set_console_desktop () {
     fi
    
 }
+
 

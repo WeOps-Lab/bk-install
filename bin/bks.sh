@@ -233,4 +233,3 @@ if test $# -gt 0 && test "x$*" != "x${*/#--help/}"; then
 else
   pretty main "$@"
 fi
-
