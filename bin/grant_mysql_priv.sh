@@ -121,7 +121,7 @@ if (( EXITCODE > 0 )); then
 fi
 
 #先判断login-path是否正确能连上，然后循环遍历HOST_LIST授权。
-if docker exec mysql mysqladmin --login-path="$LOGIN_PATH" ping >/dev/null ; then
+if docker exec mysql-client mysqladmin --login-path="$LOGIN_PATH" ping >/dev/null ; then
     IFS="," read -r -a hosts <<<"$HOST_LIST"
     for h in "${hosts[@]}"; do
         GRANT_SQL="GRANT ALL ON *.* TO $MYSQL_USER@$h IDENTIFIED BY '$MYSQL_PASSWORD'"

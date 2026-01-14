@@ -1,5 +1,14 @@
 #!/bin/bash
+source /data/install/weops_version
+SELF_DIR=$(dirname "$(readlink -f "$0")")
 
+# 加载环境变量和函数
+if [[ -r ${SELF_DIR}/tools.sh ]]; then
+    source "${SELF_DIR}/tools.sh"
+else
+    echo "${SELF_DIR}/tools.sh 不存在" >&2
+    exit 1
+fi
 
 # 配置 hosts 解析
 contrl_ip=`cat /data/install/.controller_ip`
@@ -22,7 +31,7 @@ DOCKEREOF
 fi
 "
 
-docker load < /data/ubuntu/images/registry.tgz
+# docker load < /data/ubuntu/images/registry.tgz
 if [[ ! -f /opt/registry.conf ]];then
     cat <<REGEOF > /opt/registry.conf
 version: 0.1
@@ -38,8 +47,11 @@ REGEOF
 fi
 
 if [[ ! $(docker ps -a|grep registry) ]];then
-    docker run -d --net=host --restart=always --name registry -v /opt/registry.conf:/etc/docker/registry/config.yml:ro -v /data/ubuntu/registry:/data/registry docker-bkrepo.cwoa.net/ce1b09/weops-docker/registry:latest
+    docker run -d --net=host --restart=always --name registry -v /opt/registry.conf:/etc/docker/registry/config.yml:ro -v /data/registry:/data/registry ${REGISTRY_IMAGE}
 fi
+
+echo "开始导入镜像..."
+gunzip -c ${BK_PKG_SRC_PATH}/weops-images.tar | docker load
 
 images=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^docker-bkrepo.cwoa.net/ce1b09/weops-docker/")
 

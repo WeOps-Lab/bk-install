@@ -18,8 +18,34 @@ set +a
 for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove $pkg 2>/dev/null || true; done
 apt autoremove -y
 
-if ! dpkg -l  docker-ce=$DOCKER_VERSION; then
-    apt-get install docker-ce=$DOCKER_VERSION -y
+if ! docker -v >/dev/null; then
+    tar xf ${BK_PKG_SRC_PATH}/docker-20.10.24.tgz -C /usr/bin/ --strip-components 1
+    groupadd docker
+cat >/usr/lib/systemd/system/docker.service <<EOF
+[Unit]
+Description=Docker Application Container Engine
+Documentation=https://docs.docker.com
+After=network-online.target firewalld.service
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/dockerd
+ExecReload=/bin/kill -s HUP
+LimitNOFILE=infinity
+LimitNPROC=infinity
+LimitCORE=infinity
+#TasksMax=infinity
+TimeoutStartSec=0
+Delegate=yes
+KillMode=process
+Restart=onfailure
+StartLimitBurst=3
+StartLimitInterval=60s
+
+[Install]
+WantedBy=multi-user.target
+EOF
 #    apt-get install /opt/yum/containerd.io_1.7.24-1_amd64.deb -y
 #    apt-get install /opt/yum/docker-ce-cli_5%3a27.4.0-1~ubuntu.22.04~jammy_amd64.deb -y
 #    apt-get install /opt/yum/docker-ce_5%3a20.10.24~3-0~ubuntu-jammy_amd64.deb -y
@@ -43,6 +69,11 @@ cat <<EOF > /etc/docker/daemon.json
         "max-file":"5"
     },
   "default-ulimits": {
+    "nofile": {
+      "Name": "nofile",
+      "Hard": 65535,
+      "Soft": 65535
+    },
     "core": {
       "Name": "core",
       "Hard": 0,
@@ -54,6 +85,7 @@ cat <<EOF > /etc/docker/daemon.json
 EOF
 
 mkdir -p $BK_HOME/public/paas_agent/docker
+systemctl daemon-reload
 systemctl restart docker
 systemctl enable --now docker
 # 为了让blueking身份运行的paasagent也能运行docker cli命令。

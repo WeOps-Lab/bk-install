@@ -88,6 +88,7 @@ if [[ $(docker ps -a|grep minio) ]]; then
     docker rm -f minio
 fi
 
+if [ "${#SERVER_LIST[@]}" -gt 1 ]; then
 docker run -d \
   --name minio \
   -v /data/oss:/data \
@@ -96,3 +97,14 @@ docker run -d \
   --network=host \
   --restart=always \
   $MINIO_IMAGE server $(printf "%s " "${SERVER_LIST[@]}") --address "0.0.0.0:${API_PORT}" --console-address ":${CONSOLE_PORT}"
+
+else
+docker run -d \
+  --name minio \
+  -v /data/oss:/data \
+  -e "MINIO_ROOT_USER=${ACCESS_KEY}" \
+  -e "MINIO_ROOT_PASSWORD=${ACCESS_SECRET}" \
+  --network=host \
+  --restart=always \
+  $MINIO_IMAGE server /data --address "0.0.0.0:${API_PORT}" --console-address ":${CONSOLE_PORT}"
+fi

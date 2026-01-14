@@ -217,7 +217,7 @@ _init_saas_environ () {
     source <(/opt/py36/bin/python ${CTRL_DIR}/qq.py -s -P ${CTRL_DIR}/bin/default/port.yaml)
     login_path=${_project_consul["mysql,paas"]}
     local app_code=$1
-    local EXEC_PAAS_DB="docker exec mysql mysql --login-path=${login_path}"
+    local EXEC_PAAS_DB="docker exec mysql-client mysql --login-path=${login_path}"
     local k v
 
     for k in $(eval echo \${!${app_code}_KV[@]}); do
@@ -321,7 +321,7 @@ _update_common_info () {
 _init_version_data () {
     set +u
     local target_mysql="mysql-paas"
-    local mycmd="docker exec -i mysql mysql --login-path=${target_mysql}" 
+    local mycmd="docker exec -i mysql-client mysql --login-path=${target_mysql}" 
     local MOUDULE="$1"
     declare -A VERSIONS=(
         [bksuite]="蓝鲸智云"
@@ -361,7 +361,7 @@ _OO_
         if [[ "$m" == 'paas_plugins' &&  -z "${VERSION}" ]]; then
             continue 
         else
-            docker cp /tmp/bkv_init_v.sql mysql:/tmp
+            docker cp /tmp/bkv_init_v.sql mysql-client:/tmp
             $mycmd -e "use bksuite_common; source /tmp/bkv_init_v.sql;"
         fi
     done

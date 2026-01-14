@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 用途：该脚本将用户传入的app_code写入到paas esb的免登录态表中。
-mysql_cli="docker exec mysql mysql"
+mysql_cli="docker exec mysql-client mysql"
 
 if [[ $# -lt 2 ]]; then
     echo "Usage: $0 <app_code> [<login-path-for-paas>]]"

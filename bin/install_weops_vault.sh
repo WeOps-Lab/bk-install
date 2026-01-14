@@ -115,14 +115,20 @@ docker run -d --restart=always --net=host \
 $VAULT_IMAGE server -config=/etc/vault.hcl
 
 if [[ "$INIT" == true ]]; then
-    # wait for vault online
-    sleep 30
-    log "init vault"
-    docker exec vault sh -c "export VAULT_ADDR=http://127.0.0.1:8200 vault operator init || echo 'vault already init' && exit 0"
+    VAULT_ADDR="http://127.0.0.1:8200"
+    OUT="/data/vault.secret"
+
+    # 等 Vault 可用（可选但建议）
+    until lsof -iTCP:8200 -sTCP:LISTEN >/dev/null 2>&1; do
+    sleep 1
+    done
+
+    # 判断是否已初始化
+    if docker exec vault sh -c "export VAULT_ADDR=$VAULT_ADDR; vault status -format=json" | grep -q '"initialized":[[:space:]]*true'; then
+    echo "[INFO] vault already initialized, skip init"
+    else
+    echo "[INFO] init vault"
+    # 关键：只 init 一次；并保存 JSON；并把 stderr 也接进来，避免空文件
     docker exec vault sh -c "export VAULT_ADDR=http://127.0.0.1:8200 && vault operator init -key-shares=1 -key-threshold=1" > /data/vault.secret
-    export VAULT_TOKEN=$(cat /data/vault.secret | grep "Initial Root Token" | awk '{print $4}')
-    log "enable kv secret"
-    export VAULT_UNSEAL_CODE=$(cat /data/vault.secret | grep "Unseal Key 1" | awk '{print $4}')
-    docker exec vault sh -c "export VAULT_ADDR=http://127.0.0.1:8200 && vault operator unseal ${VAULT_UNSEAL_CODE}"
-    docker exec vault sh -c "export VAULT_ADDR=http://127.0.0.1:8200;export VAULT_TOKEN=${VAULT_TOKEN};vault secrets enable -path=secret kv"
+    fi
 fi

@@ -156,7 +156,7 @@ docker run -itd \
     supervisord -n -c "${PREFIX}/etc/supervisor-usermgr-api.conf"
 
 # 检查状态
-sleep 3
+sleep 10
 if docker ps | grep -q "${cname}"; then
     echo "容器 ${cname} 启动成功"
 else

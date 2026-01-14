@@ -105,9 +105,16 @@ for cmd in "${COMMAND_RPM_LIST[@]}"; do
 done
 
 for rpm in "${COMMON_RPM_LIST[@]}"; do
-    if ! dpkg -l "${rpm}" > /dev/null 2>&1; then
-        echo "$rpm is not installed, apt-get install $cmd failed." >&2 
-        ((rt++))
+    if command -v "dpkg" >/dev/null; then
+        if ! dpkg -l "${rpm}" > /dev/null 2>&1; then
+            echo "$rpm is not installed, apt-get install $cmd failed." >&2 
+            ((rt++))
+        fi
+    else
+        if ! rpm -q "${rpm}" > /dev/null 2>&1; then
+            echo "$rpm is not installed, apt-get install $cmd failed." >&2 
+            ((rt++))
+        fi
     fi
 done
 

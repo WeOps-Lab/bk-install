@@ -103,12 +103,17 @@ fi
 if docker ps -a | grep mysql-client &>/dev/null; then
     log "检测到 mysql-client 容器已存在"
 else
-    log "创建 mysql-client 容器"
-    docker run --name mysql-client -d --net=host \
-    -v /etc/mysql/default.my.cnf:/etc/mysql/my.cnf \
-    -v ~/.mylogin.cnf:/root/.mylogin.cnf \
-    -v /var/run/mysql:/var/run/mysql \
-    ${MYSQL_CLIENT_IMAGE} sleep infinity
+    if docker ps -a --filter "name=^mysql$" --format "{{.Names}}" | grep -q "mysql"; then
+        log "创建 mysql-client 容器"
+        docker run --name mysql-client -d --net=host \
+        -v /etc/mysql/default.my.cnf:/etc/mysql/my.cnf \
+        -v ~/.mylogin.cnf:/root/.mylogin.cnf \
+        -v /var/run/mysql:/var/run/mysql \
+        ${MYSQL_CLIENT_IMAGE} sleep infinity
+    else
+        docker run --name mysql-client -d --net=host \
+        ${MYSQL_CLIENT_IMAGE} sleep infinity
+    fi
 fi
 
 if [[ -S $HOST ]]; then

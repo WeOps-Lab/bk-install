@@ -32,7 +32,7 @@ class MonitorInit:
             db_host = self.config.db_host
 
             check_value_command = f'''
-                mysql -u{db_user} -p{db_password} -h {db_host} -N --database bkmonitorv3_alert -e "select \`value\` from global_setting where \`key\`='SKIP_PLUGIN_DEBUG';"
+                docker exec mysql-client mysql -u{db_user} -p{db_password} -h {db_host} -N --database bkmonitorv3_alert -e "select \`value\` from global_setting where \`key\`='SKIP_PLUGIN_DEBUG';"
             '''
             value = get_env_variable(check_value_command)
             if value == "true":
@@ -40,7 +40,7 @@ class MonitorInit:
                 print("SKIP_PLUGIN_DEBUG configuration does not need to be changed, skipping")
             else:
                 update_command = f'''
-                    mysql -u{db_user} -p{db_password} -h {db_host} -N --database bkmonitorv3_alert -e "update global_setting set \`value\`='true' where \`key\`='SKIP_PLUGIN_DEBUG';"
+                    docker exec mysql-client mysql -u{db_user} -p{db_password} -h {db_host} -N --database bkmonitorv3_alert -e "update global_setting set \`value\`='true' where \`key\`='SKIP_PLUGIN_DEBUG';"
                 '''
                 get_env_variable(update_command)
                 check_result = get_env_variable(check_value_command)

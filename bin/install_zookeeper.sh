@@ -160,6 +160,7 @@ clientPort=$CLIENT_PORT
 maxClientCnxns=60
 autopurge.snapRetainCount=5
 autopurge.purgeInterval=8
+admin.enableServer=false
 
 # specify all zookeeper servers
 # The fist port is used by followers to connect to the leader

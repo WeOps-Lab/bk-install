@@ -14,7 +14,7 @@ def get_env_variable(command):
 
 def get_app_secret(db_user, db_password, db_host, app_code):
     app_secret_command = f'''
-        mysql -u{db_user} -p{db_password} -h {db_host} -N --database open_paas <<EOF
+        docker exec mysql-client mysql -u{db_user} -p{db_password} -h {db_host} -N --database open_paas <<EOF
         select auth_token from paas_app where code="{app_code}";
 EOF'''
     return get_env_variable(app_secret_command)

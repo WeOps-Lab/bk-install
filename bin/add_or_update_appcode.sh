@@ -12,7 +12,7 @@ APP_SECRETE=$2
 APP_DESC=${3:-"$1"}
 LOGIN_PATH=${4:-mysql-paas}     # mysql_config_editor配置的paas数据库实例
 TIMESTAMP="$(date +%Y-%m-%d\ %H:%M:%S)"
-mysql_cli="docker exec mysql mysql"
+mysql_cli="docker exec mysql-client mysql"
 
 # check 
 if ! ${mysql_cli} --login-path=$LOGIN_PATH -D open_paas -e 'show tables' >/dev/null; then

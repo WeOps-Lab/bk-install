@@ -1415,7 +1415,7 @@ install_echart () {
 install_vault () {
     local module=vault
     emphasize "create database for vault"
-    mysql --login-path=mysql-default -e "CREATE DATABASE IF NOT EXISTS vault;"
+    docker exec mysql-client mysql --login-path=mysql-default -e "CREATE DATABASE IF NOT EXISTS vault;"
     emphasize "grant mysql privilege for vault"
     master_ip=`cat install.config | grep 'mysql(master)' | awk '{print $1}'`
     if [ -n "$master_ip" ];then
@@ -1423,11 +1423,14 @@ install_vault () {
     else
             mysql_ip=$BK_MYSQL_IP0
     fi
-    ssh $mysql_ip 'docker exec mysql mysql --login-path=default-root -e "GRANT ALL PRIVILEGES ON *.* TO root@\"'"${BK_VAULT_INIT_IP}"'\" IDENTIFIED BY \"'"${BK_MYSQL_ADMIN_PASSWORD}"'\";"'
+    ssh $mysql_ip 'docker exec mysql-client mysql --login-path=default-root -e "GRANT ALL PRIVILEGES ON *.* TO root@\"'"${BK_VAULT_INIT_IP}"'\" IDENTIFIED BY \"'"${BK_MYSQL_ADMIN_PASSWORD}"'\";"'
     emphasize "install vault init node on host: ${BK_VAULT_INIT_IP}"
     "${SELF_DIR}"/pcmd.sh -H "${BK_VAULT_INIT_IP}" "${CTRL_DIR}/bin/install_weops_vault.sh -i -s mysql-default.service.consul -p ${BK_MYSQL_ADMIN_PASSWORD} -P 3306 -u ${BK_MYSQL_ADMIN_USER}"
     reg_consul_svc vault 8200 "${BK_VAULT_INIT_IP}"
-    "${SELF_DIR}"/pcmd.sh -H "${BK_VAULT_INIT_IP}" "cat /data/vault.secret" > /data/vault.secret
+    if [ ! -f /data/vault.secret ]; then
+        "${SELF_DIR}"/pcmd.sh -H "${BK_VAULT_INIT_IP}" "cat /data/vault.secret" > /data/vault.secret.tmp
+        mv /data/vault.secret.tmp /data/vault.secret
+    fi
     if [[ ! -f "${SELF_DIR}"/bin/04-final/vault.env ]]; then
         echo VAULT_UNSEAL_CODE=$(cat /data/vault.secret|grep 'Unseal Key'|awk '{print $4}') > "${SELF_DIR}"/bin/04-final/vault.env
         echo VAULT_ROOT_TOKEN=$(cat /data/vault.secret|grep 'Initial Root Token'|awk '{print $4}') >> "${SELF_DIR}"/bin/04-final/vault.env
@@ -1597,6 +1600,9 @@ install_vector () {
 }
 
 all_install_docker () {
+    # 分发 docker 安装包
+    "${SELF_DIR}"/sync.sh "ALL" "${BK_PKG_SRC_PATH}/docker-20.10.24.tgz" "${BK_PKG_SRC_PATH}/"
+    # 安装 docker
     "${SELF_DIR}"/pcmd.sh -m all "${CTRL_DIR}/bin/install_docker_for_paasagent.sh"
     emphasize "install docker on host: ${BK_PAAS_IP_COMMA} success"
 }

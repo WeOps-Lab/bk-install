@@ -1,0 +1,4 @@
+{IP_ADDR_1} iam,ssm,usermgr,gse,license,redis,consul,es7,monitorv3(influxdb-proxy),monitorv3(monitor),monitorv3(grafana),monitorv3(ingester)
+{IP_ADDR_2} nginx,consul,mongodb,rabbitmq,appo,influxdb(bkmonitorv3),monitorv3(transfer),monitorv3(unify-query)
+{IP_ADDR_3} paas,cmdb,job,mysql,zk(config),kafka(config),appt,consul,nodeman(nodeman)
+

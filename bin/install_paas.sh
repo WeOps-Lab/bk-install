@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 蓝鲸PaaS平台容器化安装脚本（最终修正版）
+source /data/install/weops_version
 
 set -euo pipefail
 
@@ -28,7 +29,6 @@ ETC_DIR="${PREFIX}/etc"
 PUBLIC_DIR="${PREFIX}/public/open_paas"
 OPENPAAS_DIR="${PREFIX}/open_paas"
 SELECTED_MODULE=""
-IMAGE="repo.service.consul:8181/paas:latest"
 RUN_USER_UID=10000
 DOCKER_NETWORK_MODE="host"
 # ----------------
@@ -107,9 +107,9 @@ if [[ -z "$SELECTED_MODULE" || "$SELECTED_MODULE" == "paas" ]]; then
     fi
 fi
 
-install -d -m 755 "$LOG_DIR"
-install -d -m 755 "$OPENPAAS_DIR"
-install -d -m 755 "$PUBLIC_DIR"
+install -o 10000 -g 10000 -d -m 755 "$LOG_DIR"
+install -o 10000 -g 10000 -d -m 755 "$OPENPAAS_DIR"
+install -o 10000 -g 10000 -d -m 755 "$PUBLIC_DIR"
 install -d -m 755 "$ETC_DIR"
 
 # 1. 拷贝代码 (防止 rsync --delete 删除渲染后的配置文件，必须先拷贝)
@@ -166,7 +166,7 @@ for m in "${MODULES[@]}"; do
                 --net="${DOCKER_NETWORK_MODE}" \
                 -u "${RUN_USER_UID}" \
                 -w "${OPENPAAS_DIR}/$m" \
-                "${IMAGE}" \
+                "${PAAS_IMAGE}" \
                 bash -c "function fail() { echo \"\$@\" >&2; exit 1; }; $MIGRATE_CMD"
         fi
     fi
@@ -190,7 +190,7 @@ for m in "${MODULES[@]}"; do
         --name="${cname}" \
         --net="${DOCKER_NETWORK_MODE}" \
         -u "${RUN_USER_UID}" \
-        "${IMAGE}" \
+        "${PAAS_IMAGE}" \
         uwsgi --ini "${ini}"
 done
 
