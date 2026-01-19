@@ -18,6 +18,7 @@ ACTION=
 MONGODB_USER=${MONGODB_USER:-""}
 MONGODB_PASSWORD=${MONGODB_PASSWORD:-""}
 REPLICA_SET_NAME=rs0
+MONGO_HOST=127.0.0.1
 usage () {
     cat <<EOF
 用法: 
@@ -173,6 +174,26 @@ else
         }
     )
     members=${members%?}	#remove last characters
+
+    # check mongo service availability
+    log "check connection to ${MONGO_HOST}:${CLIENT_PORT}"
+    max_retries=10
+    retry_count=0
+    mongo_ready=false
+
+    while (( retry_count < max_retries )); do
+        if docker exec -i mongo mongo --port "$CLIENT_PORT" --eval "quit()" >/dev/null 2>&1; then
+            mongo_ready=true
+            break
+        fi
+        log "Waiting for mongodb service at ${MONGO_HOST}:${CLIENT_PORT} ... $(( retry_count + 1 ))/$max_retries"
+        sleep 2
+        ((retry_count++))
+    done
+
+    if [[ "$mongo_ready" != "true" ]]; then
+         fail "Connect to ${MONGO_HOST}:${CLIENT_PORT} failed after $max_retries attempts, please check mongodb service."
+    fi
 
     # init replica set config
     log "start rs.initiate() for mongodb cluster"

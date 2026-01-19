@@ -18,9 +18,9 @@ set +a
 for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove $pkg 2>/dev/null || true; done
 apt autoremove -y
 
-if ! docker -v >/dev/null; then
+if ! command -v docker >/dev/null 2>&1; then
     tar xf ${BK_PKG_SRC_PATH}/docker-20.10.24.tgz -C /usr/bin/ --strip-components 1
-    groupadd docker
+    groupadd docker >/dev/null 2>&1 || true
 cat >/usr/lib/systemd/system/docker.service <<EOF
 [Unit]
 Description=Docker Application Container Engine

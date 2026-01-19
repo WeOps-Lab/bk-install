@@ -462,12 +462,14 @@ install_es7 () {
         emphasize "elasticsearch7 enable x-pack plugin on host: ${BK_ES7_IP0}"
         "${SELF_DIR}"/pcmd.sh -H "${BK_ES7_IP0}" "$CTRL_DIR/bin/setup_es_auth.sh -a"
         emphasize "sync elastic-certificates to host: $LAN_IP"
+        "${SELF_DIR}"/pcmd.sh -H "${BK_ES7_IP0}" "docker cp es:/usr/share/elasticsearch/config/elastic-certificates.p12 /etc/elasticsearch/elastic-certificates.p12"
         rsync -ao "${BK_ES7_IP0}":/etc/elasticsearch/elastic-certificates.p12 "${INSTALL_PATH}"/cert/elastic-certificates.p12
         for ip in "${BK_ES7_ELSE_IP[@]}"; do
             emphasize "sync elastic-certificates to host: ${ip}" 
             rsync -ao "${INSTALL_PATH}"/cert/elastic-certificates.p12 "${ip}":/etc/elasticsearch/elastic-certificates.p12
             emphasize "chown elastic-certficates on host: ${ip}" 
-            "${SELF_DIR}"/pcmd.sh -H "${ip}" "chown elasticsearch:elasticsearch /etc/elasticsearch/elastic-certificates.p12"
+            "${SELF_DIR}"/pcmd.sh -H "${ip}" "chown 1000:1000 /etc/elasticsearch/elastic-certificates.p12"
+            "${SELF_DIR}"/pcmd.sh -H "${ip}" "docker cp /etc/elasticsearch/elastic-certificates.p12 es:/usr/share/elasticsearch/config/elastic-certificates.p12"
             emphasize "elasticsearch7 enable x-pack plugin on host: ${ip}"
             "${SELF_DIR}"/pcmd.sh -H "${ip}" "$CTRL_DIR/bin/setup_es_auth.sh -a"
         done
@@ -1392,7 +1394,7 @@ install_prometheus () {
     if [[ ${#BK_PROMETHEUS_MASTER_IP[@]} -eq 0 ]]; then
         err "prometheus 节点数为0,不支持"
     fi
-    emphasize "install prometheus master on host: ${ip}"
+    emphasize "install prometheus master on host: ${BK_PROMETHEUS_MASTER_IP}"
     "${SELF_DIR}"/pcmd.sh -H "${BK_PROMETHEUS_MASTER_IP}" "${CTRL_DIR}/bin/install_prometheus.sh" -a "${WEOPS_PROMETHEUS_PASSWORD}" -u '${WEOPS_PROMETHEUS_USER}' -s "${WEOPS_PROMETHEUS_SECRET_BASE64}" -b "${BK_PROMETHEUS_MASTER_IP}" -m true
     emphasize "install prometheus slave on host: ${BK_PROMETHEUS_SLAVE_IP}"
     "${SELF_DIR}"/pcmd.sh -H "${BK_PROMETHEUS_SLAVE_IP}" "${CTRL_DIR}/bin/install_prometheus.sh" -a "${WEOPS_PROMETHEUS_PASSWORD}" -u '${WEOPS_PROMETHEUS_USER}' -s "${WEOPS_PROMETHEUS_SECRET_BASE64}" -b "${BK_PROMETHEUS_SLAVE_IP}" -m false

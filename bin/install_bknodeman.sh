@@ -162,9 +162,9 @@ rsync -a --delete "${MODULE_SRC_DIR}/$MODULE" "$PREFIX/"
 chown -R blueking:blueking "$PREFIX/$MODULE"
 
 # 安装rpm依赖包，如果不存在
-if ! dpkg -l "${RPM_DEP[@]}" >/dev/null; then
-    apt -y install "${RPM_DEP[@]}"
-fi
+# if ! dpkg -l "${RPM_DEP[@]}" >/dev/null; then
+#     apt -y install "${RPM_DEP[@]}"
+# fi
 
 # 渲染配置
 if [[ -r /etc/blueking/env/local.env ]]; then

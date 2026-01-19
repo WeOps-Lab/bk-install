@@ -67,7 +67,7 @@ fi
 # 遍历每个镜像并重新打标签
 for image in $images; do
     # 获取镜像ID
-    image_id=$(docker images --format "{{.Repository}}:{{.Tag}} {{.ID}}" | grep "$image" | awk '{print $2}')
+    image_id=$(docker images -q "$image")
     
     # 构建新的镜像名称，替换仓库地址
     new_image=$(echo $image | sed 's#^docker-bkrepo.cwoa.net/ce1b09/weops-docker/#repo.service.consul:8181/#')
