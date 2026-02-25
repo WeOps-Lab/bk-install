@@ -190,12 +190,19 @@ if [[ $(docker ps -a | grep datart) ]]; then
     docker rm -f datart
 fi
 
+docker run -d \
+    --net=host \
+    --name=chrome \
+    --add-host=datart.${DOMAIN}:${BK_APPO_IP} \
+    --shm-size="1g" docker-bkrepo.cwoa.net/ce1b09/weops-docker/selenium/standalone-chrome:latest
+
 docker run -d -v /data/bkce/weops/datart/config/application-config.yml:/apps/config/profiles/application-config.yml:ro \
     -v /data/bkce/weops/datart/config/datart.conf:/apps/config/datart.conf:ro \
+    -v /etc/hosts:/etc/hosts:ro \
     --restart=always \
     --net=host \
     --name=datart \
-    $DATART_IMAGE java -server -Xms2G -Xmx2G -Dspring.profiles.active=config -Dfile.encoding=UTF-8 -cp "lib/*" datart.DatartServerApplication 
+    docker-bkrepo.cwoa.net/ce1b09/weops-docker/datart:latest java -server -Xms2G -Xmx2G -Dspring.profiles.active=config -Dfile.encoding=UTF-8 -cp "lib/*" datart.DatartServerApplication 
 
 if $INIT; then
     log save static file to /tmp/static.tgz

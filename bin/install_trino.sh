@@ -152,8 +152,8 @@ fi
 cat << EOF > /data/bkce/weops/trino/config/config.properties
 coordinator=true
 node-scheduler.include-coordinator=true
-http-server.http.port=8081
-discovery.uri=http://localhost:8081
+http-server.http.port=${PORT}
+discovery.uri=http://localhost:${PORT}
 EOF
 
 if [[ -f /data/bkce/weops/trino/config/jvm.config ]]; then
@@ -221,6 +221,21 @@ cat << EOF > /data/bkce/weops/trino/config/jvm.config
 -XX:-G1UsePreventiveGC
 EOF
 
+log_server_ip=""
+# 检查是否提供了参数
+if [ -z "$log_server_ip" ]; then
+    echo "No input parameter provided. The datainsight.properties file will not be created."
+else
+    echo "Log Server IP is set to: $log_server_ip"
+
+    # 创建或覆盖 datainsight.properties 文件
+    cat <<EOF > /data/bkce/weops/trino/config/catalog/datainsight.properties
+connector.name=datainsight
+datainsight.opensearch-uri=http://$log_server_ip:9202
+datainsight.mongo-db=graylog_dev
+datainsight.mongo-uri=mongodb://$log_server_ip:27017/
+EOF
+fi
 
 if [[ $(docker ps -a|grep trino) ]]; then
     warning "已存在trino容器,将删除"
@@ -233,4 +248,4 @@ docker run -d -v /data/bkce/weops/trino/config/config.properties:/etc/trino/conf
             --restart=always \
             --net=host \
             --name=trino \
-            ${TRINO_IMAGE}
+            docker-bkrepo.cwoa.net/ce1b09/weops-docker/trino:422-amd64-v1.0.6

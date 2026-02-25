@@ -58,6 +58,27 @@ _generate_age_envvars() {
     echo "WEOPS_AGE_DB_USER=${WEOPS_AGE_DB_USER}"
 }
 
+# 检查依赖命令
+for cmd in bash consul python tr head tee; do
+    if command -v $cmd >/dev/null 2>&1; then
+        echo "命令存在: $cmd"
+    else
+        warning "缺少命令: $cmd"
+    fi
+done
+
+# 解析命令行参数，长短混合模式
+if command -v python >/dev/null 2>&1; then
+    python - <<EOF >/dev/null 2>&1
+import bcrypt
+EOF
+    if [[ $? -eq 0 ]]; then
+        echo "Python bcrypt 模块存在"
+    else
+        warning "Python 缺少 bcrypt 模块 (需要 pip install bcrypt)"
+    fi
+fi
+
 if [[ -f ${HOME}/.tag/weops.env ]]; then
     echo "tag weops.env exists, skipping"
     exit 0

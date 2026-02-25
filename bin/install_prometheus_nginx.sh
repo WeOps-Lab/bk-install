@@ -50,10 +50,15 @@ done
 log "master ip: $MASTER_IP"
 log "slave ip: $SLAVE_IP"
 log "generate prometheus proxy config to /usr/local/openresty/nginx/conf/conf.d/prometheus.conf"
+SLAVE_SERVER_CONFIG=""
+if [[ -n "${SLAVE_IP:-}" ]]; then
+    SLAVE_SERVER_CONFIG="server $SLAVE_IP:9093 backup max_fails=1 fail_timeout=30s;"
+fi
+
 cat <<EOF > /usr/local/openresty/nginx/conf/conf.d/prometheus.conf
 upstream PROMETHEUS {
         server $MASTER_IP:9093 max_fails=1 fail_timeout=30s;
-        server $SLAVE_IP:9093 backup max_fails=1 fail_timeout=30s;
+        ${SLAVE_SERVER_CONFIG}
 }
 
 server {

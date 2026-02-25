@@ -94,6 +94,10 @@ while (( $# > 0 )); do
             shift
             BIND_IP=$1
             ;;
+        --app-auth-token)
+            shift
+            APP_AUTH_TOKEN=$1
+            ;;
         -*)
             error "不可识别的参数: $1"
             ;;
@@ -140,9 +144,14 @@ if [ -z "$BIND_IP" ]; then
     error "缺少参数: --bind-ip"
 fi
 
+if [[ -z ${APP_AUTH_TOKEN} ]]; then
+    error "app-auth-token不能为空"
+fi
+
 if [[ -d /data/bkce/logs/automate/automate ]]; then
     warning "automate日志目录已存在"
 else
+    install -d -o 1001 -g 1001 /data/bkce/logs/automate
     install -d -o 1001 -g 1001 /data/bkce/logs/automate/automate
 fi
 
@@ -163,6 +172,10 @@ docker run -d --restart=always --net=host \
 -e PROMETHEUS_USER=${REMOTE_USER} \
 -e PROMETHEUS_PWD=${REMOTE_PASSWORD} \
 -e ACCESS_POINT_URL=${BIND_IP}:$PORT \
+-e BK_PAAS_HOST=http://paas.service.consul \
+-e WEOPS_APP_ID=weops_saas \
+-e WEOPS_APP_TOKEN=${APP_AUTH_TOKEN} \
+-e EXPORTER_OTLP_ENDPOINT=127.0.0.1:4317 \
 -e ENABLE_OTEL=false \
 -v /data/bkce/logs/automate:/app/logs \
 --name=auto-mate ${AUTOMATE_IMAGE}

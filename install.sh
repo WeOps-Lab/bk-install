@@ -1396,8 +1396,10 @@ install_prometheus () {
     fi
     emphasize "install prometheus master on host: ${BK_PROMETHEUS_MASTER_IP}"
     "${SELF_DIR}"/pcmd.sh -H "${BK_PROMETHEUS_MASTER_IP}" "${CTRL_DIR}/bin/install_prometheus.sh" -a "${WEOPS_PROMETHEUS_PASSWORD}" -u '${WEOPS_PROMETHEUS_USER}' -s "${WEOPS_PROMETHEUS_SECRET_BASE64}" -b "${BK_PROMETHEUS_MASTER_IP}" -m true
-    emphasize "install prometheus slave on host: ${BK_PROMETHEUS_SLAVE_IP}"
-    "${SELF_DIR}"/pcmd.sh -H "${BK_PROMETHEUS_SLAVE_IP}" "${CTRL_DIR}/bin/install_prometheus.sh" -a "${WEOPS_PROMETHEUS_PASSWORD}" -u '${WEOPS_PROMETHEUS_USER}' -s "${WEOPS_PROMETHEUS_SECRET_BASE64}" -b "${BK_PROMETHEUS_SLAVE_IP}" -m false
+    if [ -n "${BK_PROMETHEUS_SLAVE_IP:-}" ];then
+        emphasize "install prometheus slave on host: ${BK_PROMETHEUS_SLAVE_IP}"
+        "${SELF_DIR}"/pcmd.sh -H "${BK_PROMETHEUS_SLAVE_IP}" "${CTRL_DIR}/bin/install_prometheus.sh" -a "${WEOPS_PROMETHEUS_PASSWORD}" -u '${WEOPS_PROMETHEUS_USER}' -s "${WEOPS_PROMETHEUS_SECRET_BASE64}" -b "${BK_PROMETHEUS_SLAVE_IP}" -m false
+    fi
     for ip in ${BK_NGINX_IP[@]}; do
         emphasize "install prometheus nginx on host: ${ip}"
         "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_prometheus_nginx.sh -m ${BK_PROMETHEUS_MASTER_IP} -s ${BK_PROMETHEUS_SLAVE_IP}"
@@ -1454,8 +1456,13 @@ install_vault () {
 install_automate () {
     local module=automate
     emphasize "install automate on host: ${BK_AUTOMATE_IP_COMMA}"
+    APP_AUTH_TOKEN=$(docker exec mysql-client mysql --login-path=mysql-default -N -s -e "select auth_token from open_paas.paas_app where code='weops_saas';")
+    if [[ -z ${APP_AUTH_TOKEN} ]]; then
+        emphasize "get app auth token failed"
+        exit 1
+    fi
     for ip in ${BK_AUTOMATE_IP[@]}; do
-        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_automate.sh -b ${ip} -w http://prometheus.service.consul/api/v1/write -u ${WEOPS_PROMETHEUS_USER} -s ${WEOPS_PROMETHEUS_PASSWORD} -r redis.service.consul -P 6379 -a ${BK_REDIS_ADMIN_PASSWORD} -v http://vault.service.consul:8200 -t ${VAULT_ROOT_TOKEN}"
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_automate.sh -b ${ip} -w http://prometheus.service.consul/api/v1/write -u ${WEOPS_PROMETHEUS_USER} -s ${WEOPS_PROMETHEUS_PASSWORD} -r redis.service.consul -P 6379 -a ${BK_REDIS_ADMIN_PASSWORD} -v http://vault.service.consul:8200 -t ${VAULT_ROOT_TOKEN} --app-auth-token \"${APP_AUTH_TOKEN}\""
         reg_consul_svc automate 8089 "${ip}"
     done
 }
@@ -1529,7 +1536,7 @@ install_trino () {
     local module=trino
     emphasize "install trino on host: ${BK_TRINO_IP_COMMA}"
     for ip in ${BK_TRINO_IP[@]}; do
-        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_trino.sh -m \"mongodb://${BK_MONGODB_ADMIN_USER}:${BK_MONGODB_ADMIN_PASSWORD}@mongodb.service.consul:27017/admin?replicaSet=rs0\" -e http://es7.service.consul:9200 -eu elastic -ep ${BK_ES7_ADMIN_PASSWORD} -my jdbc:mysql://mysql-default.service.consul:3306 -mu root -mp ${BK_MYSQL_ADMIN_PASSWORD} -i http://influxdb.service.consul:8086 -iu admin -ip ${BK_INFLUXDB_ADMIN_PASSWORD}"
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_trino.sh -m \"mongodb://${BK_MONGODB_ADMIN_USER}:${BK_MONGODB_ADMIN_PASSWORD}@mongodb.service.consul:27017/admin?replicaSet=rs0\" -e es7.service.consul:9200 -eu elastic -ep ${BK_ES7_ADMIN_PASSWORD} -my jdbc:mysql://mysql-default.service.consul:3306 -mu root -mp ${BK_MYSQL_ADMIN_PASSWORD} -i http://influxdb.service.consul:8086 -iu admin -ip ${BK_INFLUXDB_ADMIN_PASSWORD}"
         reg_consul_svc trino 8081 "${ip}"
     done
 }
@@ -1547,18 +1554,34 @@ install_datart () {
         "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_datart.sh -m \"jdbc:mysql://mysql-default.service.consul:3306/datart?&allowMultiQueries=true&characterEncoding=utf-8\" -u root -p \"${BK_MYSQL_ADMIN_PASSWORD}\" -d ${BK_DOMAIN}"
         reg_consul_svc datart 8083 "${ip}"
     done
-    emphasize "update consul kv"
-    consul kv put bkapps/upstreams/prod/datart "[\"${BK_DATART_IP0}:8083\",\"${BK_DATART_IP1}:8083\"]"
     emphasize "sync static file to control"
     if [[ -f /data/static.tgz ]]; then
         emphasize "file already exists, skip"
     else
         rsync -avz $BK_DATART_INIT_IP:/tmp/static.tgz /data/
     fi
+
+    emphasize "Initialize datart built-in dashboards"
+    scp /data/weops-report/datart_data_*.tgz mysql-default.service.consul:/tmp/
+    "${SELF_DIR}"/pcmd.sh -H mysql-default.service.consul "gunzip -c /tmp/datart_data_*.tgz | docker exec -i mysql-client mysql --login-path=default-root --database datart"
+
     emphasize "sync static file to paas"
     tar -xf /data/static.tgz -C /data/src/open_paas/paas/
     "${SELF_DIR}"/bkcli sync paas
     "${SELF_DIR}"/bkcli restart paas
+
+    emphasize "init datart mysql data"
+    "${SELF_DIR}"/pcmd.sh -H mysql-default.service.consul "${CTRL_DIR}/bin/set_datart_mysql.sh -my "mysql-default.service.consul:3306" -mu ${BK_MYSQL_ADMIN_USER} -mp ${BK_MYSQL_ADMIN_PASSWORD} -du ${BK_DATART_INIT_IP}:8083"
+
+    emphasize "update consul kv"
+    local consul_value="["
+    for ip in "${BK_DATART_IP[@]}"; do
+        consul_value+="\"${ip}:8083\","
+    done
+    consul_value="${consul_value%,}]"
+    docker exec -i bk-consul consul kv put bkapps/upstreams/prod/datart "${consul_value}"
+    emphasize "reload nginx"
+    "${SELF_DIR}"/pcmd.sh -H ${BK_NGINX_IP} "docker exec nginx /usr/local/openresty/nginx/sbin/nginx -s reload"
 }
 
 install_monstache () {
@@ -1588,7 +1611,7 @@ install_kafkaadapter () {
     else
         for ip in ${BK_KAFKAADAPTER_IP[@]}; do
             "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_kafka_adapter.sh -u \"${WEOPS_KAFKA_ADAPTER_USER}\" -p \"${WEOPS_KAFKA_ADAPTER_PASSWORD}\" -a \"${APP_AUTH_TOKEN}\""
-        reg_consul_svc kafkaadapter 8086 "${ip}"
+        reg_consul_svc kafkaadapter 8080 "${ip}"
         done
     fi
 }

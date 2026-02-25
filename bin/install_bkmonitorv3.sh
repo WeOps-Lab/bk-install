@@ -183,9 +183,9 @@ rsync -a --delete "${MODULE_SRC_DIR}/$MODULE/" "$PREFIX/$MODULE/"
 case $BKMONITOR_MODULE in 
     monitor) 
         # 安装rpm依赖包，如果不存在
-        if ! dpkg -l "${RPM_DEP[@]}" >/dev/null; then
-            apt -y install "${RPM_DEP[@]}"
-        fi
+        # if ! dpkg -l "${RPM_DEP[@]}" >/dev/null; then
+        #     apt -y install "${RPM_DEP[@]}"
+        # fi
         # 拷贝证书目录到$PREFIX, monitor依赖证书
         rsync -a "$CERT_PATH/" "$PREFIX/cert/"
         # 加载influxdb存储相关的配置
@@ -230,20 +230,9 @@ case $BKMONITOR_MODULE in
         sed "2,9s/^/#/" $PREFIX/bkmonitorv3/monitor/on_migrate > $PREFIX/bkmonitorv3/monitor/on_migrate.docker
         chmod 0755 $PREFIX/bkmonitorv3/monitor/on_migrate.docker
         # 启动容器
-        ENV_VARS="export INFLUXDB_BKMONITORV3_IP0=$INFLUXDB_BKMONITORV3_IP0;"
-        ENV_VARS+="export INFLUXDB_BKMONITORV3_PORT=$INFLUXDB_BKMONITORV3_PORT;"
-        ENV_VARS+="export INFLUXDB_BKMONITORV3_USER=$INFLUXDB_BKMONITORV3_USER;"
-        ENV_VARS+="export INFLUXDB_BKMONITORV3_PASS=$INFLUXDB_BKMONITORV3_PASS;"
-        ENV_VARS+="export BKMONITORV3_INFLUXDB_PROXY_HOST=$BKMONITORV3_INFLUXDB_PROXY_HOST;"
-        ENV_VARS+="export BKMONITORV3_INFLUXDB_PROXY_PORT=$BKMONITORV3_INFLUXDB_PROXY_PORT;"
-        ENV_VARS+="export ES7_HOST=$ES7_HOST;"
-        ENV_VARS+="export ES7_REST_PORT=$ES7_REST_PORT;"
-        ENV_VARS+="export ES7_USER=$ES7_USER;"
-        ENV_VARS+="export ES7_PASSWORD=$ES7_PASSWORD;"
-        ENV_VARS+="export KAFKA_HOST=$KAFKA_HOST;"
-        ENV_VARS+="export KAFKA_PORT=$KAFKA_PORT;"
+        DOCKER_ENV_VARS=""
         if [[ -n ${BK_INFLUXDB_BKMONITORV3_IP1:-} ]]; then
-            ENV_VARS+="export INFLUXDB_BKMONITORV3_IP1=$INFLUXDB_BKMONITORV3_IP1;"
+            DOCKER_ENV_VARS="-e INFLUXDB_BKMONITORV3_IP1=$INFLUXDB_BKMONITORV3_IP1"
         fi
         docker run -itd \
         -v $PREFIX/bkmonitorv3/monitor:$PREFIX/bkmonitorv3/monitor \
@@ -254,7 +243,7 @@ case $BKMONITOR_MODULE in
         -e BK_FILE_PATH=$PREFIX/bkmonitorv3/cert/saas_priv.txt \
         -e PYTHON_BIN=/cache/.bk/env/bin/python3.6_e \
         -e INFLUXDB_BKMONITORV3_IP0="$INFLUXDB_BKMONITORV3_IP0" \
-        -e INFLUXDB_BKMONITORV3_IP1="${INFLUXDB_BKMONITORV3_IP1:-}" \
+        $DOCKER_ENV_VARS \
         -e INFLUXDB_BKMONITORV3_IP="$INFLUXDB_BKMONITORV3_IP" \
         -e BK_MONITOR_INFLUXDB_HOST="$INFLUXDB_BKMONITORV3_IP" \
         -e INFLUXDB_BKMONITORV3_PORT="$INFLUXDB_BKMONITORV3_PORT" \

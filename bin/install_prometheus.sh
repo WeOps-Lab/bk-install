@@ -99,7 +99,7 @@ rule_files:
 - /opt/bitnami/prometheus/conf/rules/extra_rules.yml
 
 remote_write:
-  - url: "http://${PROMETHEUS_USER}:${PROMETHEUS_AUTH}@kafka-adapter.service.consul:8080/receive"
+  - url: "http://${PROMETHEUS_USER}:${PROMETHEUS_AUTH}@kafkaadapter.service.consul:8080/receive"
     write_relabel_configs:
     - action: labeldrop
       regex: container_label_(.+)|id|name
