@@ -52,8 +52,6 @@ case $service in
             find /data/install/bin/default/ -type f -exec sed -i -E 's/([A-Z_]*REDIS_MODE[[:space:]]*=[[:space:]]*")?sentinel(")?/\1standalone\2/g' {} \;
         fi
         _bkc install controller
-        _bkc install consul
-        _bkc start consul
         _bkc install bkenv
         _bkc install python
         _bkc sync common

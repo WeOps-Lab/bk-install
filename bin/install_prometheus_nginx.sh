@@ -1,5 +1,7 @@
 #!/bin/bash
 set -euo pipefail
+
+SLAVE_IP=${SLAVE_IP:-}
 warning () {
     echo "$@" 1>&2
     EXITCODE=$((EXITCODE + 1))

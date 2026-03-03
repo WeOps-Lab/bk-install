@@ -122,7 +122,12 @@ install_bkenv () {
                     bkiam_search_engine.env
                     bkapigw.env)
 
-
+    
+    if ! command -v uuid &>/dev/null; then
+        echo "uuid 命令不存在，请安装"
+        exit 1
+    fi
+    
     # 生成bkrc
     set +e
     gen_bkrc
@@ -1402,7 +1407,10 @@ install_prometheus () {
     fi
     for ip in ${BK_NGINX_IP[@]}; do
         emphasize "install prometheus nginx on host: ${ip}"
-        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_prometheus_nginx.sh -m ${BK_PROMETHEUS_MASTER_IP} -s ${BK_PROMETHEUS_SLAVE_IP}"
+        if [[ -n "${BK_PROMETHEUS_SLAVE_IP:-}" ]]; then
+            PROMETHEUS_SLAVE="-s ${BK_PROMETHEUS_SLAVE_IP}"
+        fi
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_prometheus_nginx.sh -m ${BK_PROMETHEUS_MASTER_IP} ${PROMETHEUS_SLAVE}"
     done
 }
 
@@ -1604,7 +1612,7 @@ install_age () {
 install_kafkaadapter () {
     local module=kafkaadapter
     emphasize "install kafkaadapter on host: ${BK_KAFKAADAPTER_IP_COMMA}"
-    APP_AUTH_TOKEN=$(mysql --login-path=mysql-default -N -s -e "select auth_token from open_paas.paas_app where code='weops_saas';")
+    APP_AUTH_TOKEN=$(docker exec -it mysql mysql --login-path=mysql-default -N -s -e 'select auth_token from open_paas.paas_app where code='\''weops_saas'\'';' | tr -d '\r' | sed -e 's/^[ \t]*//' -e '/^$/d')
     if [[ -z ${APP_AUTH_TOKEN} ]]; then
         emphasize "get app auth token failed"
         exit 1

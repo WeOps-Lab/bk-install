@@ -8,7 +8,7 @@ warning () {
 }
 
 _generate_weopsconsul_envvars() {
-    echo "WEOPS_CONSUL_KEYSTR_32BYTES=$(consul keygen)"
+    echo "WEOPS_CONSUL_KEYSTR_32BYTES=$(openssl rand -base64 32)"
 }
 
 rndpw () {
@@ -59,7 +59,7 @@ _generate_age_envvars() {
 }
 
 # 检查依赖命令
-for cmd in bash consul python tr head tee; do
+for cmd in bash python tr head tee; do
     if command -v $cmd >/dev/null 2>&1; then
         echo "命令存在: $cmd"
     else

@@ -124,11 +124,6 @@ rndpw () {
     </dev/urandom tr -dc _A-Za-z0-9"$2" | head -c"${1:-12}"
 }
 
-if ! command -v uuid &>/dev/null; then
-    echo "uuid 命令不存在，请安装"
-    exit 1
-fi 
-
 case $1 in 
     paas_plugins)
         # 跟paas共用单节点redis
