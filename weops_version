@@ -1,5 +1,5 @@
 AGE_IMAGE="repo.service.consul:8181/age:PG16-1.1.5"
-KAFKA_ADAPTER_IMAGE="repo.service.consul:8181/weops-kafka-adapter:v1.1.1"
+KAFKA_ADAPTER_IMAGE="repo.service.consul:8181/weops-kafka-adapter:v1.2.6-amd64"
 # TRINO_IMAGE="repo.service.consul:8181/trino:422-amd64-v1.0.6"
 VECTOR_IMAGE="repo.service.consul:8181/vector:0.34.1-debian"
 MONSTACHE_IMAGE="repo.service.consul:8181/monstache:latest"
@@ -13,7 +13,7 @@ PROMETHEUS_IMAGE="repo.service.consul:8181/prometheus:2.38.0"
 MINIO_IMAGE="repo.service.consul:8181/minio:latest"
 # DATART_IMAGE="repo.service.consul:8181/datart:latest"
 CASBIN_IMAGE="repo.service.consul:8181/casbinmesh:latest"
-AUTOMATE_IMAGE="repo.service.consul:8181/auto-mate:v1.0.21-fix6"
+AUTOMATE_IMAGE="repo.service.consul:8181/auto-mate:v1.0.31-fix3"
 
 # 蓝鲸平台组件环境变量
 INFLUXDB_IMAGE="repo.service.consul:8181/influxdb:1.7.11"

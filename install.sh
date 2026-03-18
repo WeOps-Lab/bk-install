@@ -127,10 +127,24 @@ install_bkenv () {
         echo "uuid 命令不存在，请安装"
         exit 1
     fi
+
+# 解析命令行参数，长短混合模式
+if command -v python >/dev/null 2>&1; then
+    python - <<EOF >/dev/null 2>&1
+import bcrypt
+EOF
+    if [[ $? -eq 0 ]]; then
+        echo "Python bcrypt 模块存在"
+    else
+        echo "Python 缺少 bcrypt 模块 (找运维人员处理)"
+        exit 1
+    fi
+fi
     
     # 生成bkrc
     set +e
     gen_bkrc
+    source $HOME/.bkrc
     
     cd "${SELF_DIR}"/bin/default
     for m in "${projects[@]}"; do
@@ -1612,7 +1626,7 @@ install_age () {
 install_kafkaadapter () {
     local module=kafkaadapter
     emphasize "install kafkaadapter on host: ${BK_KAFKAADAPTER_IP_COMMA}"
-    APP_AUTH_TOKEN=$(docker exec -it mysql mysql --login-path=mysql-default -N -s -e 'select auth_token from open_paas.paas_app where code='\''weops_saas'\'';' | tr -d '\r' | sed -e 's/^[ \t]*//' -e '/^$/d')
+    APP_AUTH_TOKEN=$(docker exec -it mysql-client mysql --login-path=mysql-default -N -s -e 'select auth_token from open_paas.paas_app where code='\''weops_saas'\'';' | tr -d '\r' | sed -e 's/^[ \t]*//' -e '/^$/d')
     if [[ -z ${APP_AUTH_TOKEN} ]]; then
         emphasize "get app auth token failed"
         exit 1

@@ -46,12 +46,12 @@ storage:
 REGEOF
 fi
 
+echo "开始导入镜像..."
+gunzip -c ${BK_PKG_SRC_PATH}/weops-images.tar | docker load
+
 if [[ ! $(docker ps -a|grep registry) ]];then
     docker run -d --net=host --restart=always --name registry -v /opt/registry.conf:/etc/docker/registry/config.yml:ro -v /data/registry:/data/registry ${REGISTRY_IMAGE}
 fi
-
-echo "开始导入镜像..."
-gunzip -c ${BK_PKG_SRC_PATH}/weops-images.tar | docker load
 
 images=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^docker-bkrepo.cwoa.net/ce1b09/weops-docker/")
 
