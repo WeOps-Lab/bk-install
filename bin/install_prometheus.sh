@@ -13,6 +13,8 @@ usage () {
 用法: 
     $PROGRAM [ -h --help -?             [可选] "查看帮助" ]
             [ -a --auth             [必填] "prometheus basic auth密码" ]
+            [ -ak --kafkaadapter-auth [必填] "kafka adapter 密码" ]
+            [ -au --kafkaadapter-user [必填] "kafka adapter 用户" ]
             [ -u --user             [必填] "prometheus basic auth用户" ]
             [ -s --secret           [必填] "prometheus basic auth密钥,base64格式编码" ]
             [ -m --master           [必填] "prometheus master节点" ]
@@ -53,6 +55,14 @@ while (( $# > 0 )); do
         --auth | -a)
             shift
             PROMETHEUS_AUTH=$1
+            ;;
+        --kafkaadapter-auth | -ak)
+            shift
+            KAFKA_ADAPTER_AUTH=$1
+            ;;
+        --kafkaadapter-user | -au)
+            shift
+            KAFKA_ADAPTER_USER=$1
             ;;
         --user | -u)
             shift
@@ -99,7 +109,7 @@ rule_files:
 - /opt/bitnami/prometheus/conf/rules/extra_rules.yml
 
 remote_write:
-  - url: "http://${PROMETHEUS_USER}:${PROMETHEUS_AUTH}@kafkaadapter.service.consul:8080/receive"
+  - url: "http://${KAFKA_ADAPTER_USER}:${KAFKA_ADAPTER_AUTH}@kafkaadapter.service.consul:8080/receive"
     write_relabel_configs:
     - action: labeldrop
       regex: container_label_(.+)|id|name
@@ -160,10 +170,10 @@ groups:
     expr: sum without(interface, image)(rate(container_network_receive_bytes_total{cluster!="", image!="", pod!=""}[2m]))
   # pod 容器内存使用率
   - record: container_memory_utilization
-    expr: container_memory_usage_bytes{cluster!="", container!="", image!="", namespace!="", pod!=""} / container_spec_memory_limit_bytes {cluster!="", container!="", image!="", namespace!="", pod!=""}
+    expr: container_memory_working_set_bytes{cluster!="", container!="", image!="", namespace!="", pod!=""} / container_spec_memory_limit_bytes {cluster!="", container!="", image!="", namespace!="", pod!=""}
   # pod 内存使用率
   - record: pod_memory_utilization
-    expr: sum without(container)(container_memory_usage_bytes{cluster!="", container!="", image!="", namespace!="", pod!=""} / container_spec_memory_limit_bytes {cluster!="", container!="", image!="", namespace!="", pod!=""})
+    expr: sum without(container)(container_memory_working_set_bytes{cluster!="", container!="", image!="", namespace!="", pod!=""} / container_spec_memory_limit_bytes {cluster!="", container!="", image!="", namespace!="", pod!=""})
   # pod 容器CPU使用率
   - record: container_cpu_utilization
     expr: sum without(cpu)(irate(container_cpu_usage_seconds_total{cluster!="",container!="",image!="",namespace!="",pod!=""}[2m]))
@@ -172,7 +182,7 @@ groups:
     expr: sum without(cpu,container)(irate(container_cpu_usage_seconds_total{cluster!="",container!="",image!="",namespace!="",pod!=""}[2m]))
   # pod 内存使用量
   - record: pod_memory_usage
-    expr: sum without(container)(container_memory_usage_bytes{cluster!="",container!="",namespace!="",pod!="",image!=""})
+    expr: sum without(container)(container_memory_working_set_bytes{cluster!="",container!="",namespace!="",pod!="",image!=""})
 - name: ifmib
   interval: 30s
   rules:

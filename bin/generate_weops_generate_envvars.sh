@@ -76,6 +76,7 @@ EOF
         echo "Python bcrypt 模块存在"
     else
         warning "Python 缺少 bcrypt 模块 (需要 pip install bcrypt)"
+        exit 0
     fi
 fi
 

@@ -232,7 +232,7 @@ echo "OPTS=\"--logtostderr=false --v=3 --config=${PREFIX}/cmdb/server/conf/migra
 sed -i '/OPTS/d' /etc/sysconfig/bk-cmdb-cloud
 echo "OPTS=\"--logtostderr=false --v=3 --regdiscv=${BK_CMDB_ZK_ADDR} --enable_cryptor=false\"" >> /etc/sysconfig/bk-cmdb-cloud
 
-
+[ -d /etc/rsyslog.d ] || mkdir -p /etc/rsyslog.d
 # generate rsyslog.d/bk-cmdb.conf 
 > /etc/rsyslog.d/bk-cmdb.conf
 for m in "${!PROJECTS[@]}"; do

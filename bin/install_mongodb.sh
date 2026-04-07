@@ -155,7 +155,7 @@ storage:
 # how the process runs
 processManagement:
   fork: false  # fork and run in background
-  pidFilePath: /var/run/mongodb/mongod.pid  # location of pidfile
+  pidFilePath: /tmp/mongod.pid  # location of pidfile
   timeZoneInfo: /usr/share/zoneinfo
 # network interfaces
 net:
@@ -208,7 +208,6 @@ docker run -d \
     -v $DATA_DIR:$DATA_DIR \
     -v $LOG_DIR:$LOG_DIR \
     -v /tmp:/tmp \
-    -v /var/run/mongodb:/var/run/mongodb \
     $MONGODB_IMAGE -f /etc/mongod.conf
 
 # 等待27017端口启动

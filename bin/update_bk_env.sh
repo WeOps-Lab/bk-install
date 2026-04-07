@@ -9,11 +9,38 @@ SSH_CONNECTION=${SSH_CONNECTION-}
 BK_UID=${BK_BLUEKING_UID:-10000}
 BK_GID=${BK_BLUEKING_GID:-10000}
 
+check_blueking_ids() {
+    local current_gid current_uid current_user_gid
+
+    if getent group blueking &>/dev/null; then
+        current_gid=$(getent group blueking | cut -d: -f3)
+        if [[ "$current_gid" != "$BK_GID" ]]; then
+            echo "blueking group gid is $current_gid, expected $BK_GID" >&2
+            exit 1
+        fi
+    fi
+
+    if id -u blueking &>/dev/null; then
+        current_uid=$(id -u blueking)
+        current_user_gid=$(id -g blueking)
+        if [[ "$current_uid" != "$BK_UID" ]]; then
+            echo "blueking user uid is $current_uid, expected $BK_UID" >&2
+            exit 1
+        fi
+        if [[ "$current_user_gid" != "$BK_GID" ]]; then
+            echo "blueking user gid is $current_user_gid, expected $BK_GID" >&2
+            exit 1
+        fi
+    fi
+}
+
 # create blueking user and group
 getent group blueking &>/dev/null || \
     groupadd --gid "$BK_GID" blueking
 id -u blueking &>/dev/null || \
     useradd --uid "$BK_UID" --gid "$BK_GID" -m -d /home/blueking -c "BlueKing EE User" --shell /bin/bash blueking 
+
+check_blueking_ids
 
 install -o blueking -g blueking -m 755 -d /etc/blueking/env 
 

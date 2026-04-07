@@ -124,8 +124,7 @@ install_bkenv () {
 
     
     if ! command -v uuid &>/dev/null; then
-        echo "uuid 命令不存在，请安装"
-        exit 1
+        err "uuid 命令不存在，请安装"
     fi
 
 # 解析命令行参数，长短混合模式
@@ -136,10 +135,14 @@ EOF
     if [[ $? -eq 0 ]]; then
         echo "Python bcrypt 模块存在"
     else
-        echo "Python 缺少 bcrypt 模块 (找运维人员处理)"
-        exit 1
+        err "Python 缺少 bcrypt 模块"
     fi
 fi
+    
+    # 判断$BK_PKG_SRC_PATH/blueking.env是否存在
+    if ! [[ -f "/data/src/blueking.env" ]]; then
+        err "/data/src/blueking.env 不存在"
+    fi
     
     # 生成bkrc
     set +e
@@ -164,6 +167,27 @@ fi
     bash "${SELF_DIR}"/bin/generate_weops_generate_envvars.sh
 
     set -e
+
+    local weops_env_file=/data/install/bin/04-final/weops.env
+    local required_weops_env_vars=(
+        WEOPS_PROMETHEUS_SECRET_BASE64
+        WEOPS_KAFKA_ADAPTER_SECRET
+    )
+    local missing_weops_env_vars=()
+
+    if [[ ! -f ${weops_env_file} ]]; then
+        err "${weops_env_file} 不存在"
+    fi
+
+    for required_var in "${required_weops_env_vars[@]}"; do
+        if ! grep -q "^${required_var}=" "${weops_env_file}"; then
+            missing_weops_env_vars+=("${required_var}")
+        fi
+    done
+
+    if [[ ${#missing_weops_env_vars[@]} -gt 0 ]]; then
+        err "${weops_env_file} 中缺少变量: ${missing_weops_env_vars[*]}"
+    fi
 }
 
 install_kafka () {
@@ -995,7 +1019,7 @@ _install_job_backend () {
     migrate_sql ${module}
 
     # job依赖java环境
-    ${SELF_DIR}/pcmd.sh -H ${BK_JOB_IP_COMMA} "if ! which java >/dev/null;then ${CTRL_DIR}/bin/install_java.sh -p ${INSTALL_PATH} -f ${BK_PKG_SRC_PATH}/java8.tgz;fi"
+    ${SELF_DIR}/pcmd.sh -H ${BK_JOB_IP_COMMA} "${CTRL_DIR}/bin/install_java.sh -p ${INSTALL_PATH} -f ${BK_PKG_SRC_PATH}/java8.tgz"
 
     # mongod用户授权
     emphasize "grant mongodb privilege for ${module}"
@@ -1414,10 +1438,10 @@ install_prometheus () {
         err "prometheus 节点数为0,不支持"
     fi
     emphasize "install prometheus master on host: ${BK_PROMETHEUS_MASTER_IP}"
-    "${SELF_DIR}"/pcmd.sh -H "${BK_PROMETHEUS_MASTER_IP}" "${CTRL_DIR}/bin/install_prometheus.sh" -a "${WEOPS_PROMETHEUS_PASSWORD}" -u '${WEOPS_PROMETHEUS_USER}' -s "${WEOPS_PROMETHEUS_SECRET_BASE64}" -b "${BK_PROMETHEUS_MASTER_IP}" -m true
+    "${SELF_DIR}"/pcmd.sh -H "${BK_PROMETHEUS_MASTER_IP}" "${CTRL_DIR}/bin/install_prometheus.sh" -a "${WEOPS_PROMETHEUS_PASSWORD}" -u '${WEOPS_PROMETHEUS_USER}' -s "${WEOPS_PROMETHEUS_SECRET_BASE64}" -ak "${WEOPS_KAFKA_ADAPTER_PASSWORD}" -au "${WEOPS_KAFKA_ADAPTER_USER}" -b "${BK_PROMETHEUS_MASTER_IP}" -m true
     if [ -n "${BK_PROMETHEUS_SLAVE_IP:-}" ];then
         emphasize "install prometheus slave on host: ${BK_PROMETHEUS_SLAVE_IP}"
-        "${SELF_DIR}"/pcmd.sh -H "${BK_PROMETHEUS_SLAVE_IP}" "${CTRL_DIR}/bin/install_prometheus.sh" -a "${WEOPS_PROMETHEUS_PASSWORD}" -u '${WEOPS_PROMETHEUS_USER}' -s "${WEOPS_PROMETHEUS_SECRET_BASE64}" -b "${BK_PROMETHEUS_SLAVE_IP}" -m false
+        "${SELF_DIR}"/pcmd.sh -H "${BK_PROMETHEUS_SLAVE_IP}" "${CTRL_DIR}/bin/install_prometheus.sh" -a "${WEOPS_PROMETHEUS_PASSWORD}" -u '${WEOPS_PROMETHEUS_USER}' -s "${WEOPS_PROMETHEUS_SECRET_BASE64}" -ak "${WEOPS_KAFKA_ADAPTER_PASSWORD}" -au "${WEOPS_KAFKA_ADAPTER_USER}" -b "${BK_PROMETHEUS_SLAVE_IP}" -m false
     fi
     for ip in ${BK_NGINX_IP[@]}; do
         emphasize "install prometheus nginx on host: ${ip}"

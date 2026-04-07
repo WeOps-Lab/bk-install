@@ -12,7 +12,7 @@ VAULT_IMAGE="repo.service.consul:8181/vault:latest"
 PROMETHEUS_IMAGE="repo.service.consul:8181/prometheus:2.38.0"
 MINIO_IMAGE="repo.service.consul:8181/minio:latest"
 # DATART_IMAGE="repo.service.consul:8181/datart:latest"
-CASBIN_IMAGE="repo.service.consul:8181/casbinmesh:latest"
+CASBIN_IMAGE="repo.service.consul:8181/casbinmesh:20251208"
 AUTOMATE_IMAGE="repo.service.consul:8181/auto-mate:v1.0.31-fix3"
 
 # 蓝鲸平台组件环境变量

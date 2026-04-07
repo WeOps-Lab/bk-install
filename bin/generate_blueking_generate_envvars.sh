@@ -3,7 +3,7 @@
 
 # 读入基础配置
 SELF_DIR=$(dirname "$(readlink -f "$0")")
-source $BK_PKG_SRC_PATH/blueking.env
+source /data/src/blueking.env
 
 #####
 # 自动协助生成变量
@@ -13,8 +13,6 @@ source $BK_PKG_SRC_PATH/blueking.env
 # 输出：作业平台需要的通信用的ssl证书密码
 gen_cert_passwd_var () {
     local gse_pass job_pass
-#    gse_pass=$(awk '$1 == "gse_job_api_client.p12" {print $NF}' "$BK_CERT_PATH"/passwd.txt)
-#    job_pass=$(awk '$1 == "job_server.p12" {print $NF}' "$BK_CERT_PATH"/passwd.txt)
     gse_pass=${GSE_KEYTOOL_PASS}
     job_pass=${JOB_KEYTOOL_PASS}    
 

@@ -91,8 +91,16 @@ fi
 
 cat <<EOF > /data/weops/vector/vector.yaml
 api:
-  enabled: false
+  enabled: true
+  address: 0.0.0.0:8686
 sources:
+  prometheus_receive_ipmi:
+    type: prometheus_remote_write
+    address: "0.0.0.0:9091"
+    auth:
+      strategy: "basic"
+      username: "admin"
+      password: "admin"
   # 接收kafka数据
   kafka_in:
     type: kafka
@@ -101,6 +109,31 @@ sources:
     topics:
       - ^0bkmonitor_.*
 transforms:
+  ipmi_remap:
+    type: remap
+    inputs: ["prometheus_receive_ipmi"]
+    source: |
+      if .name == "ipmi_sensor_value" {
+        if .tags.unit == "rpm" {
+          .name = "ipmi_fan_speed_rpm"
+        } else if .tags.unit == "watts" {
+          .name = "ipmi_power_watts"
+        } else if .tags.unit == "degrees_c" {
+          .name = "ipmi_temperature_celsius"
+        } else if .tags.unit == "volts" {
+          .name = "ipmi_voltage_volts"
+        }
+        .tags.dimension = .tags.name
+      }
+
+      if .name == "ipmi_sensor_status" {
+        if match_array([.tags.name], r'(psu\d+_status|chassis_power_status)') {
+            .name = "ipmi_chassis_power_state"
+            .tags.dimension = .tags.name
+        }
+      }
+      
+
   # 转换kafka数据
   parse_kafka:
     type: remap
@@ -153,7 +186,7 @@ transforms:
                 m.labels.bk_target_topo_level = g.bk_target_topo_level or ""
               end
             end
-            
+        
             local new_event = {
               metric = {
                 gauge = {
@@ -161,7 +194,7 @@ transforms:
                 },
                 name = m.key,
                 tags = m.labels
-              }
+              } 
             }
             if m.labels.protocol == nil then
               emit(new_event)
@@ -173,6 +206,7 @@ sinks:
     type: prometheus_remote_write
     inputs:
       - to_metric
+      - ipmi_remap
     endpoint: "${PROMETHEUS_REMOTEWRITE_URL}"
     auth:
       strategy: "basic"

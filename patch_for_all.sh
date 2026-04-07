@@ -109,6 +109,10 @@ local ips=($(grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' /data/ins
 local os_family="${2:-no}"
 local lib_path="${3:-no}"
 
+if [[ $lib_path == "no" ]];then
+    lib_path=$(ldd "$(which ssh)" | awk '{print $3}' | grep '^/' | head -n 1 | xargs dirname)
+fi
+
 case "$os_family" in
     rhel)
         for ip in ${ips[@]};do

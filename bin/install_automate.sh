@@ -177,5 +177,6 @@ docker run -d --restart=always --net=host \
 -e WEOPS_APP_TOKEN=${APP_AUTH_TOKEN} \
 -e EXPORTER_OTLP_ENDPOINT=127.0.0.1:4317 \
 -e ENABLE_OTEL=false \
+-e MAX_EVENT_RES=70000000 \
 -v /data/bkce/logs/automate:/app/logs \
 --name=auto-mate ${AUTOMATE_IMAGE}
