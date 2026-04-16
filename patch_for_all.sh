@@ -328,6 +328,8 @@ add_vars () {
 add_vars bk_sops $bk_sops_vars
 }
 
+# 分发文件
+/data/install/sync.sh all /data/src/patch /data/src/
 
 case $1 in
     change_starter)

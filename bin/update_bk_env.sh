@@ -119,7 +119,8 @@ fi
 
 # 安装基础命令和基础包
 COMMAND_RPM_LIST=(rsync jq expect uuid lsof)
-COMMON_RPM_LIST=(dialog openssl libssl-dev zlib1g-dev libreadline-dev libcurl4-openssl-dev libcurl4 libxml2-dev iproute2 dnsutils bash-completion)
+COMMON_RPM_LIST=(dialog openssl dnsutils bash-completion)
+CMD_DESC=(dialog openssl dig nslookup)
 apt-get -y install "${COMMAND_RPM_LIST[@]}" "${COMMON_RPM_LIST[@]}"
 
 rt=0
@@ -131,17 +132,10 @@ for cmd in "${COMMAND_RPM_LIST[@]}"; do
     fi
 done
 
-for rpm in "${COMMON_RPM_LIST[@]}"; do
-    if command -v "dpkg" >/dev/null; then
-        if ! dpkg -l "${rpm}" > /dev/null 2>&1; then
-            echo "$rpm is not installed, apt-get install $cmd failed." >&2 
-            ((rt++))
-        fi
-    else
-        if ! rpm -q "${rpm}" > /dev/null 2>&1; then
-            echo "$rpm is not installed, apt-get install $cmd failed." >&2 
-            ((rt++))
-        fi
+for rpm in "${CMD_DESC[@]}"; do
+    if ! command -v "$rpm" >/dev/null; then
+        echo "$rpm is not found, apt-get install $rpm failed." >&2 
+        ((rt++))
     fi
 done
 

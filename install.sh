@@ -1582,7 +1582,7 @@ install_trino () {
     local module=trino
     emphasize "install trino on host: ${BK_TRINO_IP_COMMA}"
     for ip in ${BK_TRINO_IP[@]}; do
-        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_trino.sh -m \"mongodb://${BK_MONGODB_ADMIN_USER}:${BK_MONGODB_ADMIN_PASSWORD}@mongodb.service.consul:27017/admin?replicaSet=rs0\" -e es7.service.consul:9200 -eu elastic -ep ${BK_ES7_ADMIN_PASSWORD} -my jdbc:mysql://mysql-default.service.consul:3306 -mu root -mp ${BK_MYSQL_ADMIN_PASSWORD} -i http://influxdb.service.consul:8086 -iu admin -ip ${BK_INFLUXDB_ADMIN_PASSWORD}"
+        "${SELF_DIR}"/pcmd.sh -H "${ip}" "${CTRL_DIR}/bin/install_trino.sh -m \"mongodb://${BK_MONGODB_ADMIN_USER}:${BK_MONGODB_ADMIN_PASSWORD}@mongodb.service.consul:27017/admin?replicaSet=rs0\" -e es7.service.consul -eu elastic -ep ${BK_ES7_ADMIN_PASSWORD} -my jdbc:mysql://mysql-default.service.consul:3306 -mu root -mp ${BK_MYSQL_ADMIN_PASSWORD} -i http://influxdb.service.consul:8086 -iu admin -ip ${BK_INFLUXDB_ADMIN_PASSWORD}"
         reg_consul_svc trino 8081 "${ip}"
     done
 }

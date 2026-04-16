@@ -17,13 +17,21 @@
 source /data/install/utils.fc
 SELF_DIR=$(readlink -f "$(dirname "$0")")
 
-# 导入ITSM SQL数据,修改告警事件自动关闭时间
+# 修改告警事件自动关闭时间
 /data/install/pcmd.sh -H $BK_MYSQL_IP0 "mkdir -p ${SELF_DIR}/../sqlfile"
 scp ${SELF_DIR}/../sqlfile/*.sql $BK_MYSQL_IP0:${SELF_DIR}/../sqlfile/
 scp ${SELF_DIR}/../sqlfile/*.gz $BK_MYSQL_IP0:${SELF_DIR}/../sqlfile/
-/data/install/pcmd.sh -H $BK_MYSQL_IP0 "gunzip -c ${SELF_DIR}/../sqlfile/weops_itsm_table.20240424.sql.gz | mysql -h $BK_MYSQL_IP -uroot -p$BK_MYSQL_ADMIN_PASSWORD -Dbk_itsm"
 /data/install/pcmd.sh -H $BK_MYSQL_IP0 "mysql --login-path=default-root < ${SELF_DIR}/../sqlfile/cw_uac_saas.sql"
 
+# 导入ITSM SQL数据
+itsm_version=$(docker exec mysql-client mysql -h $BK_MYSQL_IP -uroot -p$BK_MYSQL_ADMIN_PASSWORD -N -s -e "use open_paas;SELECT v.version FROM paas_saas_app_version v INNER JOIN paas_saas_app a ON a.current_version_id = v.id WHERE a.code = 'bk_itsm';")
+if echo $itsm_version | grep "4.29" >/dev/null; then
+  echo "ITSM version is 4.29, need to import SQL data"
+  cat /data/src/patch/sql/weops_itsm_table.*.sql | docker exec -i mysql-client mysql -h $BK_MYSQL_IP -uroot -p$BK_MYSQL_ADMIN_PASSWORD -Dbk_itsm
+else
+  echo "ITSM version is not 4.29, need to import SQL data"
+  /data/install/pcmd.sh -H $BK_MYSQL_IP0 "gunzip -c ${SELF_DIR}/../sqlfile/weops_itsm_table.20240424.sql.gz | docker exec -i mysql mysql -h $BK_MYSQL_IP -uroot -p$BK_MYSQL_ADMIN_PASSWORD -Dbk_itsm"
+fi
 # 生成登陆密码加密需要的环境变量
 python <<EOF
 import base64
