@@ -1607,9 +1607,15 @@ install_datart () {
         rsync -avz $BK_DATART_INIT_IP:/tmp/static.tgz /data/
     fi
 
+    if [[ -f /data/datart_data_20250318.tgz ]]; then
+        emphasize "file already exists, skip"
+    else
+        rsync -avz $BK_DATART_INIT_IP:/data/weops-report/datart_data_20250318.tgz /data/
+    fi
+
     emphasize "Initialize datart built-in dashboards"
-    scp /data/weops-report/datart_data_*.tgz mysql-default.service.consul:/tmp/
-    "${SELF_DIR}"/pcmd.sh -H mysql-default.service.consul "gunzip -c /tmp/datart_data_*.tgz | docker exec -i mysql-client mysql --login-path=default-root --database datart"
+    scp /data/datart_data_20250318.tgz mysql-default.service.consul:/tmp/
+    "${SELF_DIR}"/pcmd.sh -H mysql-default.service.consul "gunzip -c /tmp/datart_data_20250318.tgz | docker exec -i mysql-client mysql --login-path=default-root --database datart"
 
     emphasize "sync static file to paas"
     tar -xf /data/static.tgz -C /data/src/open_paas/paas/
