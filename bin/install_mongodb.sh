@@ -155,7 +155,6 @@ storage:
 # how the process runs
 processManagement:
   fork: false  # fork and run in background
-  pidFilePath: /tmp/mongod.pid  # location of pidfile
   timeZoneInfo: /usr/share/zoneinfo
 # network interfaces
 net:
@@ -189,7 +188,7 @@ $LOG_DIR/*.log {
     notifempty
     sharedscripts
     postrotate
-        /bin/kill -SIGUSR1 \`cat /var/run/mongodb/mongod.pid 2> /dev/null\` 2> /dev/null || true
+        /usr/bin/docker kill --signal=SIGUSR1 mongo > /dev/null 2>&1 || true
     endscript
 }
 EOF
@@ -207,12 +206,11 @@ docker run -d \
     -v /etc/mongod.key:/etc/mongod.key \
     -v $DATA_DIR:$DATA_DIR \
     -v $LOG_DIR:$LOG_DIR \
-    -v /tmp:/tmp \
     $MONGODB_IMAGE -f /etc/mongod.conf
 
 # 等待27017端口启动
 log "等待mongodb启动"
-wait_port_alive CLIENT_PORT 10
+wait_port_alive "$CLIENT_PORT" 10
 log "mongodb启动成功"
 
 # log "启动mongod，并设置开机启动mongod"
